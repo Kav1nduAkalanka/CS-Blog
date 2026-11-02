@@ -6,6 +6,7 @@ import { HomePage } from '../pages/HomePage'
 import { AboutPage } from '../pages/AboutPage'
 import { BlogPage } from '../pages/BlogPage'
 import { BlogArticlePage } from '../pages/BlogArticlePage'
+import { BlogSubmissionPage } from '../pages/BlogSubmissionPage'
 import { GlobalVolunteerPage } from '../pages/GlobalVolunteerPage'
 import { GlobalTalentPage } from '../pages/GlobalTalentPage'
 import { GlobalTeacherPage } from '../pages/GlobalTeacherPage'
@@ -16,6 +17,7 @@ import { AdminDashboardPage } from '../pages/admin/AdminDashboardPage'
 import { AdminPostEditorPage } from '../pages/admin/AdminPostEditorPage'
 import { AdminMessagesPage } from '../pages/admin/AdminMessagesPage'
 import { AdminMessageDetailPage } from '../pages/admin/AdminMessageDetailPage'
+import { AdminTeamPage } from '../pages/admin/AdminTeamPage'
 
 export const router = createBrowserRouter([
   // ── Public website (with Navbar + Footer) ──────────────────────────────
@@ -25,6 +27,8 @@ export const router = createBrowserRouter([
       { path: '/', element: <HomePage /> },
       { path: '/about', element: <AboutPage /> },
       { path: '/blog', element: <BlogPage /> },
+      { path: '/blog/submit', element: <BlogSubmissionPage /> },
+      { path: '/submit-story', element: <BlogSubmissionPage /> },
       { path: '/blog/:id', element: <BlogArticlePage /> },
       { path: '/programs/global-volunteer', element: <GlobalVolunteerPage /> },
       { path: '/programs/global-talent', element: <GlobalTalentPage /> },
@@ -50,6 +54,7 @@ export const router = createBrowserRouter([
       { path: '/admin/posts/:id/edit', element: <AdminPostEditorPage /> },
       { path: '/admin/messages', element: <AdminMessagesPage /> },
       { path: '/admin/messages/:id', element: <AdminMessageDetailPage /> },
+      { path: '/admin/team', element: <AdminTeamPage /> },
     ],
   },
 ])

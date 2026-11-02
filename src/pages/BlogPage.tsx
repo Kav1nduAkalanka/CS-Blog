@@ -280,6 +280,19 @@ export function BlogPage() {
               </button>
             </div>
           )}
+
+          {/* Contributor Portal Footer Note */}
+          <div className="mt-16 border-t border-[#e5e7eb] pt-8 text-center">
+            <p className="text-[14px] text-[#6b7280]">
+              Are you an exchange participant or member?{' '}
+              <Link
+                to="/blog/submit"
+                className="text-brand font-semibold hover:underline inline-flex items-center gap-1"
+              >
+                Share your journey in our Contributor Portal &rarr;
+              </Link>
+            </p>
+          </div>
         </div>
       </section>
     </>

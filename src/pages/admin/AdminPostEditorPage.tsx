@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Save, Eye, EyeOff } from 'lucide-react'
+import { ArrowLeft, Save, Eye, EyeOff, Check, Clock } from 'lucide-react'
 import { useAuth } from '../../stores/authStore'
 import { RichTextEditor } from '../../components/admin/RichTextEditor'
 import { ImageUploader } from '../../components/admin/ImageUploader'
 import { useAdminBlogPost } from '../../hooks/queries/useBlogQueries'
 import { useSaveBlogPost } from '../../hooks/mutations/useBlogMutations'
 import { useToastStore } from '../../stores/uiStore'
-import type { BlogPostCategory } from '../../lib/database.types'
+import type { BlogPostCategory, BlogPostStatus } from '../../lib/database.types'
 
 const CATEGORIES: BlogPostCategory[] = [
   'Exchange Experiences',
@@ -25,9 +25,10 @@ interface FormData {
   category: BlogPostCategory
   cover_image_url: string
   author_name: string
+  author_email: string
   author_avatar_url: string
   read_time: number
-  status: 'draft' | 'published'
+  status: BlogPostStatus
 }
 
 const EMPTY_FORM: FormData = {
@@ -37,6 +38,7 @@ const EMPTY_FORM: FormData = {
   category: 'Exchange Experiences',
   cover_image_url: '',
   author_name: '',
+  author_email: '',
   author_avatar_url: '',
   read_time: 5,
   status: 'draft',
@@ -49,9 +51,10 @@ function postToForm(post: {
   category: BlogPostCategory
   cover_image_url: string | null
   author_name: string
+  author_email?: string | null
   author_avatar_url: string | null
   read_time: number
-  status: 'draft' | 'published'
+  status: BlogPostStatus
 }): FormData {
   return {
     title: post.title,
@@ -60,6 +63,7 @@ function postToForm(post: {
     category: post.category,
     cover_image_url: post.cover_image_url ?? '',
     author_name: post.author_name,
+    author_email: post.author_email ?? '',
     author_avatar_url: post.author_avatar_url ?? '',
     read_time: post.read_time,
     status: post.status,
@@ -158,7 +162,13 @@ export function AdminPostEditorPage() {
               {isEditing ? 'Edit Post' : 'New Post'}
             </h1>
             <p className="text-[13px] text-[#9ca3af]">
-              {form.status === 'published' ? 'Published' : 'Draft'}
+              {form.status === 'published'
+                ? 'Published'
+                : form.status === 'pending'
+                  ? 'Pending Review'
+                  : form.status === 'rejected'
+                    ? 'Rejected'
+                    : 'Draft'}
             </p>
           </div>
         </div>
@@ -175,12 +185,21 @@ export function AdminPostEditorPage() {
           <button
             onClick={() => void save(true)}
             disabled={saveMutation.isPending}
-            className="bg-brand hover:bg-brand-dark flex items-center gap-2 rounded-xl px-5 py-2.5 text-[14px] font-semibold text-white transition-colors disabled:opacity-60"
+            className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-[14px] font-semibold text-white transition-colors disabled:opacity-60 ${
+              form.status === 'pending'
+                ? 'bg-green-600 hover:bg-green-700'
+                : 'bg-brand hover:bg-brand-dark'
+            }`}
           >
             {form.status === 'published' ? (
               <>
                 <EyeOff size={16} />
                 Unpublish
+              </>
+            ) : form.status === 'pending' ? (
+              <>
+                <Check size={16} />
+                Approve & Publish
               </>
             ) : (
               <>
@@ -191,6 +210,33 @@ export function AdminPostEditorPage() {
           </button>
         </div>
       </div>
+
+      {form.status === 'pending' && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <div className="flex items-center gap-3">
+            <Clock className="size-5 shrink-0 text-amber-600" />
+            <div>
+              <p className="text-[14px] font-bold text-amber-900">
+                Student Submission (Pending Approval)
+              </p>
+              <p className="text-[12px] text-amber-700">
+                Submitted by {form.author_name}
+                {form.author_email ? ` (${form.author_email})` : ''}. Review the content, make any
+                editorial touches, and approve to publish live on the blog.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void save(true)}
+            disabled={saveMutation.isPending}
+            className="flex items-center gap-1.5 rounded-xl bg-green-600 px-4 py-2 text-[13px] font-bold text-white shadow-sm transition-colors hover:bg-green-700 disabled:opacity-60"
+          >
+            <Check size={16} />
+            Approve &amp; Publish Now
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-[1fr_320px] gap-6">
         <div className="flex flex-col gap-5">
@@ -269,6 +315,15 @@ export function AdminPostEditorPage() {
                   className={inputCls}
                 />
               </Field>
+              <Field label="Author Email" hint="Submitter contact / member email">
+                <input
+                  type="email"
+                  value={form.author_email}
+                  onChange={(e) => set('author_email', e.target.value)}
+                  placeholder="e.g. dilini@aiesec.net"
+                  className={inputCls}
+                />
+              </Field>
               <ImageUploader
                 label="Author Avatar"
                 value={form.author_avatar_url}
@@ -288,31 +343,58 @@ export function AdminPostEditorPage() {
           </div>
 
           <div className="rounded-2xl bg-white p-5 shadow-sm">
-            <p className="text-navy mb-3 text-[13px] font-semibold">Visibility</p>
+            <p className="text-navy mb-3 text-[13px] font-semibold">Status &amp; Visibility</p>
             <div className="flex flex-col gap-2">
-              {(['draft', 'published'] as const).map((s) => (
+              {(
+                [
+                  {
+                    id: 'published',
+                    label: 'Published',
+                    desc: 'Live and visible to everyone on the public blog',
+                  },
+                  {
+                    id: 'pending',
+                    label: 'Pending Review',
+                    desc: 'Submitted by student/member awaiting approval',
+                  },
+                  {
+                    id: 'draft',
+                    label: 'Draft',
+                    desc: 'Work in progress, only visible to admins',
+                  },
+                  {
+                    id: 'rejected',
+                    label: 'Rejected',
+                    desc: 'Submission archived or declined',
+                  },
+                ] as const
+              ).map((s) => (
                 <label
-                  key={s}
+                  key={s.id}
                   className={[
-                    'flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors',
-                    form.status === s
-                      ? 'border-brand bg-brand/5'
+                    'flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors',
+                    form.status === s.id
+                      ? s.id === 'published'
+                        ? 'border-green-500 bg-green-50/40'
+                        : s.id === 'pending'
+                          ? 'border-amber-400 bg-amber-50/50'
+                          : s.id === 'rejected'
+                            ? 'border-red-400 bg-red-50/40'
+                            : 'border-brand bg-brand/5'
                       : 'border-[#e5e7eb] hover:border-[#d1d5db]',
                   ].join(' ')}
                 >
                   <input
                     type="radio"
                     name="status"
-                    value={s}
-                    checked={form.status === s}
-                    onChange={() => set('status', s)}
-                    className="accent-brand"
+                    value={s.id}
+                    checked={form.status === s.id}
+                    onChange={() => set('status', s.id)}
+                    className="accent-brand mt-0.5"
                   />
                   <div>
-                    <p className="text-navy text-[13px] font-semibold capitalize">{s}</p>
-                    <p className="text-[11px] text-[#9ca3af]">
-                      {s === 'draft' ? 'Only visible to admins' : 'Visible to everyone on the blog'}
-                    </p>
+                    <p className="text-navy text-[13px] font-semibold">{s.label}</p>
+                    <p className="text-[11px] text-[#9ca3af]">{s.desc}</p>
                   </div>
                 </label>
               ))}

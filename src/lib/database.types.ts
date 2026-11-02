@@ -1,4 +1,4 @@
-export type BlogPostStatus = 'draft' | 'published'
+export type BlogPostStatus = 'draft' | 'pending' | 'published' | 'rejected'
 
 export type BlogPostCategory =
   | 'Exchange Experiences'
@@ -16,6 +16,7 @@ export interface BlogPost {
   category: BlogPostCategory
   cover_image_url: string | null
   author_name: string
+  author_email?: string | null
   author_avatar_url: string | null
   read_time: number // minutes
   status: BlogPostStatus
