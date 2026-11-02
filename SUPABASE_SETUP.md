@@ -27,9 +27,10 @@ CREATE TABLE blog_posts (
   category      text            NOT NULL,
   cover_image_url text,
   author_name   text            NOT NULL,
+  author_email  text,
   author_avatar_url text,
   read_time     integer         NOT NULL DEFAULT 5,
-  status        text            NOT NULL DEFAULT 'draft',
+  status        text            NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'pending', 'published', 'rejected')),
   published_at  timestamptz,
   created_at    timestamptz     NOT NULL DEFAULT now(),
   updated_at    timestamptz     NOT NULL DEFAULT now(),
@@ -44,10 +45,35 @@ CREATE POLICY "Public can read published posts"
   ON blog_posts FOR SELECT
   USING (status = 'published');
 
+-- Anyone/students can submit stories in pending state
+CREATE POLICY "Public can submit pending posts"
+  ON blog_posts FOR INSERT
+  TO anon, authenticated
+  WITH CHECK (status = 'pending');
+
 -- Authenticated users (editors) can do everything
 CREATE POLICY "Editors can manage all posts"
   ON blog_posts FOR ALL
   USING (auth.role() = 'authenticated');
+```
+
+**Already created the table?** Run this migration:
+
+```sql
+-- Add author_email column if not present
+ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS author_email text;
+
+-- Update status check constraint to include 'pending' and 'rejected'
+ALTER TABLE blog_posts DROP CONSTRAINT IF EXISTS blog_posts_status_check;
+ALTER TABLE blog_posts ADD CONSTRAINT blog_posts_status_check
+  CHECK (status IN ('draft', 'pending', 'published', 'rejected'));
+
+-- Allow public student submissions
+DROP POLICY IF EXISTS "Public can submit pending posts" ON blog_posts;
+CREATE POLICY "Public can submit pending posts"
+  ON blog_posts FOR INSERT
+  TO anon, authenticated
+  WITH CHECK (status = 'pending');
 ```
 
 ---
@@ -117,6 +143,12 @@ CREATE POLICY "Editors can upload blog images"
   ON storage.objects FOR INSERT
   WITH CHECK (bucket_id = 'blog-images' AND auth.role() = 'authenticated');
 
+-- Anyone (including student story submissions) can upload images to blog-images
+CREATE POLICY "Anyone can upload submission images"
+  ON storage.objects FOR INSERT
+  TO anon, authenticated
+  WITH CHECK (bucket_id = 'blog-images');
+
 -- Logged-in editors can delete their uploaded images
 CREATE POLICY "Editors can delete blog images"
   ON storage.objects FOR DELETE
@@ -133,16 +165,17 @@ After running this SQL, editors can:
 
 ## Summary of URLs
 
-| URL                     | What it does             |
-| ----------------------- | ------------------------ |
-| `/blog`                 | Public blog listing page |
-| `/blog/:id`             | Individual blog article  |
-| `/admin`                | Editor login page        |
-| `/admin/dashboard`      | Manage all posts         |
-| `/admin/posts/new`      | Write a new post         |
-| `/admin/posts/:id/edit` | Edit an existing post    |
-| `/admin/messages`       | Contact message inbox    |
-| `/admin/messages/:id`   | View a contact message   |
+| URL                     | What it does                       |
+| ----------------------- | ---------------------------------- |
+| `/blog`                 | Public blog listing page           |
+| `/blog/:id`             | Individual blog article            |
+| `/blog/submit`          | Student story submission page      |
+| `/admin`                | Editor login page                  |
+| `/admin/dashboard`      | Manage all posts & approve pending |
+| `/admin/posts/new`      | Write a new post                   |
+| `/admin/posts/:id/edit` | Edit an existing post              |
+| `/admin/messages`       | Contact message inbox              |
+| `/admin/messages/:id`   | View a contact message             |
 
 ---
 

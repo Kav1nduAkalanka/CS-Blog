@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, PenLine, LogOut, ExternalLink, Mail } from 'lucide-react'
+import { LayoutDashboard, PenLine, LogOut, ExternalLink, Mail, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../../stores/authStore'
 import { images } from '../../assets/images'
 import { useUnreadMessageCount } from '../../hooks/queries/useContactMessageQueries'
@@ -8,10 +8,11 @@ const navItems = [
   { to: '/admin/dashboard', icon: LayoutDashboard, label: 'All Posts' },
   { to: '/admin/posts/new', icon: PenLine, label: 'New Post' },
   { to: '/admin/messages', icon: Mail, label: 'Messages' },
+  { to: '/admin/team', icon: ShieldCheck, label: 'Admin Team' },
 ]
 
 export function AdminLayout() {
-  const { user, signOut } = useAuth()
+  const { user, role, signOut } = useAuth()
   const navigate = useNavigate()
   const { data: unreadCount = 0 } = useUnreadMessageCount()
 
@@ -97,8 +98,14 @@ export function AdminLayout() {
             View Blog
           </a>
           <div className="mb-2 rounded-lg bg-[#f5f7fa] px-3 py-2">
-            <p className="text-navy truncate text-[12px] font-medium">{user?.email}</p>
-            <p className="text-[11px] text-[#9ca3af]">Editor</p>
+            <p className="text-navy truncate text-[12px] font-semibold">{user?.email}</p>
+            <p className="mt-0.5 text-[11px] font-medium text-slate-500">
+              {role === 'super_admin' ? (
+                <span className="font-bold text-purple-600">Super Admin</span>
+              ) : (
+                <span className="font-bold text-blue-600">Admin</span>
+              )}
+            </p>
           </div>
           <button
             onClick={handleSignOut}

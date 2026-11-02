@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase'
 import { STATIC_BLOG_POSTS } from '../data/staticBlogPosts'
-import type { BlogPost } from '../lib/database.types'
+import type { BlogPost, BlogPostStatus } from '../lib/database.types'
 
 export function isSupabaseConfigured() {
   const url = import.meta.env.VITE_SUPABASE_URL as string
@@ -72,12 +72,88 @@ export interface BlogPostSavePayload {
   category: BlogPost['category']
   cover_image_url: string
   author_name: string
+  author_email?: string | null
   author_avatar_url: string
   read_time: number
-  status: 'draft' | 'published'
+  status: BlogPostStatus
   published_at: string | null
   updated_at: string
   created_by: string | null
+}
+
+export interface StudentBlogPostSubmission {
+  title: string
+  excerpt: string
+  content: string
+  category: BlogPost['category']
+  cover_image_url: string
+  author_name: string
+  author_email: string
+  author_avatar_url?: string
+  read_time?: number
+}
+
+export async function submitStudentPost(
+  submission: StudentBlogPostSubmission,
+): Promise<{ error: string | null }> {
+  const plainText = submission.content.replace(/<[^>]*>/g, '').trim()
+  const wordCount = plainText.length > 0 ? plainText.split(/\s+/).length : 0
+  const readTime = submission.read_time ?? Math.max(1, Math.ceil(wordCount / 200))
+  const now = new Date().toISOString()
+
+  if (!isSupabaseConfigured()) {
+    return { error: null }
+  }
+
+  const payload = {
+    title: submission.title,
+    excerpt: submission.excerpt,
+    content: submission.content,
+    category: submission.category,
+    cover_image_url: submission.cover_image_url || null,
+    author_name: submission.author_name,
+    author_email: submission.author_email,
+    author_avatar_url: submission.author_avatar_url || null,
+    read_time: readTime,
+    status: 'pending' as BlogPostStatus,
+    published_at: null,
+    created_at: now,
+    updated_at: now,
+    created_by: null,
+  }
+
+  // Do not chain .select() — public/anon users can insert pending posts
+  // but RLS prevents selecting unpublished posts.
+  const { error } = await supabase.from('blog_posts').insert([payload] as object[])
+  if (error) return { error: error.message }
+  return { error: null }
+}
+
+export async function approvePost(id: string): Promise<void> {
+  const now = new Date().toISOString()
+  const { error } = await supabase
+    .from('blog_posts')
+    .update({
+      status: 'published',
+      published_at: now,
+      updated_at: now,
+    } as object)
+    .eq('id', id)
+
+  if (error) throw new Error(error.message)
+}
+
+export async function rejectPost(id: string): Promise<void> {
+  const now = new Date().toISOString()
+  const { error } = await supabase
+    .from('blog_posts')
+    .update({
+      status: 'rejected',
+      updated_at: now,
+    } as object)
+    .eq('id', id)
+
+  if (error) throw new Error(error.message)
 }
 
 export async function createPost(
@@ -102,8 +178,8 @@ export async function deletePost(id: string): Promise<void> {
   if (error) throw new Error(error.message)
 }
 
-export async function togglePublish(post: BlogPost): Promise<'draft' | 'published'> {
-  const newStatus = post.status === 'published' ? 'draft' : 'published'
+export async function togglePublish(post: BlogPost): Promise<BlogPostStatus> {
+  const newStatus: BlogPostStatus = post.status === 'published' ? 'draft' : 'published'
   const { error } = await supabase
     .from('blog_posts')
     .update({

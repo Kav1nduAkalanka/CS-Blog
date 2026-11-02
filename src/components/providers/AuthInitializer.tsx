@@ -7,15 +7,15 @@ export function AuthInitializer() {
   const setLoading = useAuthStore((s) => s.setLoading)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      await setSession(session)
       setLoading(false)
     })
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      await setSession(session)
     })
 
     return () => subscription.unsubscribe()

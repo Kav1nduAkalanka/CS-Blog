@@ -9,6 +9,15 @@ interface ImageUploaderProps {
 }
 
 async function uploadToSupabase(file: File): Promise<string> {
+  const url = import.meta.env.VITE_SUPABASE_URL as string
+  if (!url || url === 'https://your-project-id.supabase.co') {
+    return new Promise((resolve) => {
+      const reader = new FileReader()
+      reader.onloadend = () => resolve(reader.result as string)
+      reader.readAsDataURL(file)
+    })
+  }
+
   const ext = file.name.split('.').pop() ?? 'jpg'
   const path = `posts/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
 

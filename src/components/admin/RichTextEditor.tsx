@@ -1,5 +1,5 @@
 import { useEditor, EditorContent } from '@tiptap/react'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
 import Image from '@tiptap/extension-image'
@@ -7,7 +7,7 @@ import Link from '@tiptap/extension-link'
 import Placeholder from '@tiptap/extension-placeholder'
 import TextAlign from '@tiptap/extension-text-align'
 import Highlight from '@tiptap/extension-highlight'
-import { useRef } from 'react'
+import Youtube from '@tiptap/extension-youtube'
 import { supabase } from '../../lib/supabase'
 import { enhanceBlogContentHtml } from '../../lib/blogContent'
 import {
@@ -32,6 +32,7 @@ import {
   Redo,
   Code,
   Loader2,
+  Video,
 } from 'lucide-react'
 
 interface ToolbarButtonProps {
@@ -91,6 +92,14 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
         allowBase64: true,
         HTMLAttributes: { class: 'max-w-full h-auto' },
       }),
+      Youtube.configure({
+        controls: true,
+        nocookie: true,
+        allowFullscreen: true,
+        HTMLAttributes: {
+          class: 'w-full aspect-video rounded-xl my-6 shadow-md mx-auto block max-w-[720px]',
+        },
+      }),
       Link.configure({ openOnClick: false, HTMLAttributes: { class: 'text-brand underline' } }),
       Placeholder.configure({
         placeholder: placeholder ?? 'Start writing your story…',
@@ -128,9 +137,31 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
           data: { publicUrl },
         } = supabase.storage.from('blog-images').getPublicUrl(data.path)
         editor.chain().focus().setImage({ src: publicUrl }).run()
+      } else {
+        // Fallback to local DataURL preview if Supabase storage is not reachable
+        const reader = new FileReader()
+        reader.onloadend = () => {
+          if (reader.result) {
+            editor.chain().focus().setImage({ src: reader.result as string }).run()
+          }
+        }
+        reader.readAsDataURL(file)
       }
     } finally {
       setUploadingImage(false)
+    }
+  }
+
+  const addYoutubeVideo = () => {
+    const url = window.prompt(
+      'Enter YouTube Video URL (e.g. https://www.youtube.com/watch?v=... or https://youtu.be/...):',
+    )
+    if (url && url.trim()) {
+      editor.commands.setYoutubeVideo({
+        src: url.trim(),
+        width: 640,
+        height: 360,
+      })
     }
   }
 
@@ -329,12 +360,17 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
             <path d="M7.5 1a6.5 6.5 0 1 0 0 13A6.5 6.5 0 0 0 7.5 1ZM0 7.5a7.5 7.5 0 1 1 15 0 7.5 7.5 0 0 1-15 0Zm7.5-3a.5.5 0 0 1 .5.5v2h2a.5.5 0 0 1 0 1h-2v2a.5.5 0 0 1-1 0v-2h-2a.5.5 0 0 1 0-1h2v-2a.5.5 0 0 1 .5-.5Z" />
           </svg>
         </ToolbarButton>
+
+        {/* Video — YouTube embed */}
+        <ToolbarButton onClick={addYoutubeVideo} title="Embed YouTube Video">
+          <Video size={15} />
+        </ToolbarButton>
       </div>
 
       {/* Editor area */}
       <EditorContent
         editor={editor}
-        className="prose prose-slate [&_.ProseMirror_blockquote]:border-brand max-w-none px-6 py-5 [&_.ProseMirror]:min-h-[320px] [&_.ProseMirror]:outline-none [&_.ProseMirror_.blog-pull-quote]:mb-6 [&_.ProseMirror_.blog-pull-quote]:text-[20px] [&_.ProseMirror_.blog-pull-quote]:leading-[1.6] [&_.ProseMirror_.blog-pull-quote]:font-medium [&_.ProseMirror_.blog-pull-quote]:text-[#005bb2] [&_.ProseMirror_.blog-pull-quote]:italic [&_.ProseMirror_blockquote]:my-6 [&_.ProseMirror_blockquote]:rounded-r-xl [&_.ProseMirror_blockquote]:border-l-4 [&_.ProseMirror_blockquote]:bg-[#ebf5ff] [&_.ProseMirror_blockquote]:px-8 [&_.ProseMirror_blockquote]:py-5 [&_.ProseMirror_blockquote]:text-[#45455b] [&_.ProseMirror_blockquote]:not-italic [&_.ProseMirror_img]:mx-auto [&_.ProseMirror_img]:my-6 [&_.ProseMirror_img]:block [&_.ProseMirror_img]:h-auto [&_.ProseMirror_img]:w-auto [&_.ProseMirror_img]:max-w-[600px] [&_.ProseMirror_img]:rounded-xl [&_.ProseMirror_p]:mb-4 [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:h-0 [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-[#9ca3af] [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)]"
+        className="prose prose-slate [&_.ProseMirror_blockquote]:border-brand max-w-none px-6 py-5 [&_.ProseMirror]:min-h-[320px] [&_.ProseMirror]:outline-none [&_.ProseMirror_.blog-pull-quote]:mb-6 [&_.ProseMirror_.blog-pull-quote]:text-[20px] [&_.ProseMirror_.blog-pull-quote]:leading-[1.6] [&_.ProseMirror_.blog-pull-quote]:font-medium [&_.ProseMirror_.blog-pull-quote]:text-[#005bb2] [&_.ProseMirror_.blog-pull-quote]:italic [&_.ProseMirror_blockquote]:my-6 [&_.ProseMirror_blockquote]:rounded-r-xl [&_.ProseMirror_blockquote]:border-l-4 [&_.ProseMirror_blockquote]:bg-[#ebf5ff] [&_.ProseMirror_blockquote]:px-8 [&_.ProseMirror_blockquote]:py-5 [&_.ProseMirror_blockquote]:text-[#45455b] [&_.ProseMirror_blockquote]:not-italic [&_.ProseMirror_img]:mx-auto [&_.ProseMirror_img]:my-6 [&_.ProseMirror_img]:block [&_.ProseMirror_img]:h-auto [&_.ProseMirror_img]:w-auto [&_.ProseMirror_img]:max-w-[600px] [&_.ProseMirror_img]:rounded-xl [&_.ProseMirror_iframe]:mx-auto [&_.ProseMirror_iframe]:my-6 [&_.ProseMirror_iframe]:block [&_.ProseMirror_iframe]:w-full [&_.ProseMirror_iframe]:max-w-[680px] [&_.ProseMirror_iframe]:aspect-video [&_.ProseMirror_iframe]:rounded-xl [&_.ProseMirror_iframe]:shadow-md [&_.ProseMirror_p]:mb-4 [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:h-0 [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-[#9ca3af] [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)]"
       />
     </div>
   )

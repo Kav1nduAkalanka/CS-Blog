@@ -1,10 +1,14 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
+  approvePost,
   createPost,
   deletePost,
+  rejectPost,
+  submitStudentPost,
   togglePublish,
   updatePost,
   type BlogPostSavePayload,
+  type StudentBlogPostSubmission,
 } from '../../api/blog'
 import { queryKeys } from '../../lib/queryKeys'
 import type { BlogPost } from '../../lib/database.types'
@@ -14,6 +18,33 @@ function invalidateBlogQueries(queryClient: ReturnType<typeof useQueryClient>, i
   if (id) {
     void queryClient.invalidateQueries({ queryKey: queryKeys.blogPosts.detail(id) })
   }
+}
+
+export function useSubmitStudentPost() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (submission: StudentBlogPostSubmission) => submitStudentPost(submission),
+    onSuccess: () => invalidateBlogQueries(queryClient),
+  })
+}
+
+export function useApproveBlogPost() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: string) => approvePost(id),
+    onSuccess: (_data, id) => invalidateBlogQueries(queryClient, id),
+  })
+}
+
+export function useRejectBlogPost() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: string) => rejectPost(id),
+    onSuccess: (_data, id) => invalidateBlogQueries(queryClient, id),
+  })
 }
 
 export function useToggleBlogPublish() {
