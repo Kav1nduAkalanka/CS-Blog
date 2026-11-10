@@ -551,13 +551,13 @@ export function BlogSubmissionPage() {
                 <div className="sm:col-span-2">
                   <Field
                     label="Your University / AIESEC Role (Optional)"
-                    hint="e.g. 'Global Volunteer in Poland' or 'Undergraduate, University of Colombo'"
+                    hint="e.g. 'Global Volunteer in Poland' or 'Undergraduate, University of Moratuwa'"
                   >
                     <input
                       type="text"
                       value={form.author_role}
                       onChange={(e) => update('author_role', e.target.value)}
-                      placeholder="e.g. Global Volunteer in Poland · University of Colombo"
+                      placeholder="e.g. Global Volunteer in Thailand · University of Moratuwa"
                       className={inputCls}
                     />
                   </Field>
