@@ -1,300 +1,476 @@
-import { useState, useMemo } from 'react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { Search } from 'lucide-react'
-import { AnimatePresence } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
+import { PenLine, Plus, Search } from 'lucide-react'
 import { useBlogPosts } from '../hooks/useBlogPosts'
 import type { BlogPost } from '../lib/database.types'
-import { Stagger, StaggerItem } from '../components/motion/Stagger'
+import { useReducedMotion } from '../hooks/useReducedMotion'
+import { StoryViewer } from '../components/blog/StoryViewer'
+import { StoryGlobe } from '../components/blog/StoryGlobe'
+import { HomeJourney } from '../components/blog/HomeJourney'
+import { homeStories } from '../components/blog/destinations'
+import {
+  STORY_CHAPTERS,
+  categoryColor,
+  formatStoryDate,
+  sortStories,
+  storyHighlights,
+} from '../components/blog/storyUtils'
 
-/* ─── Data ─── */
+const WRITING_PROMPTS = [
+  'The first night in a country you had never seen',
+  'A moment you led when nobody asked you to',
+  'Something an exchange taught you that a classroom never could',
+]
 
-const CATEGORIES = [
-  'All',
-  'Exchange Experiences',
-  'Leadership',
-  'Personal Development',
-  'Events & Announcements',
-  'Member Stories',
-  'Global Impact',
-] as const
+/* ─── Tilt: the card leans toward the pointer in 3D ─── */
 
-const CATEGORY_COLORS: Record<string, string> = {
-  'Exchange Experiences': '#00bfa5',
-  Leadership: '#037ef3',
-  'Personal Development': '#7b2fbe',
-  'Events & Announcements': '#ff6b35',
-  'Member Stories': '#00c853',
-  'Global Impact': '#3d5afe',
-}
+function Tilt({ children, className }: { children: ReactNode; className?: string }) {
+  const reduced = useReducedMotion()
+  const ref = useRef<HTMLDivElement>(null)
+  const [t, setT] = useState({ x: 0, y: 0, on: false })
 
-/* ─── Sub-components ─── */
-
-function CategoryBadge({ category }: { category: string }) {
-  const color = CATEGORY_COLORS[category] ?? '#037ef3'
   return (
-    <span
-      className="inline-block rounded-[20px] px-[10px] py-[4px] text-[11px] font-semibold tracking-[0.33px] text-white drop-shadow-[0px_2px_4px_rgba(0,0,0,0.18)]"
-      style={{ backgroundColor: color }}
+    <div
+      ref={ref}
+      className={['[perspective:1100px]', className].join(' ')}
+      onPointerMove={(e) => {
+        if (reduced || e.pointerType !== 'mouse' || !ref.current) return
+        const r = ref.current.getBoundingClientRect()
+        setT({
+          x: (e.clientX - r.left) / r.width - 0.5,
+          y: (e.clientY - r.top) / r.height - 0.5,
+          on: true,
+        })
+      }}
+      onPointerLeave={() => setT({ x: 0, y: 0, on: false })}
     >
-      {category}
-    </span>
+      <div
+        className="relative size-full transition-transform duration-300 ease-out transform-3d"
+        style={{
+          transform: `rotateY(${t.x * 10}deg) rotateX(${-t.y * 10}deg) translateZ(${t.on ? 12 : 0}px)`,
+        }}
+      >
+        {children}
+        {/* moving glare */}
+        <div
+          className="pointer-events-none absolute inset-0 rounded-[inherit] transition-opacity duration-300"
+          style={{
+            opacity: t.on ? 1 : 0,
+            background: `radial-gradient(circle at ${(t.x + 0.5) * 100}% ${(t.y + 0.5) * 100}%, rgba(255,255,255,.28), transparent 55%)`,
+          }}
+        />
+      </div>
+    </div>
   )
 }
 
-function BlogCard({ post }: { post: BlogPost }) {
-  const formattedDate = new Date(post.published_at ?? post.created_at).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
+/* ─── Card variants ─── */
 
+type Variant = 'feature' | 'photo' | 'wide' | 'quote'
+
+function variantFor(i: number): Variant {
+  if (i === 0) return 'feature'
+  if (i % 5 === 2) return 'quote'
+  if (i % 5 === 4) return 'wide'
+  return 'photo'
+}
+
+const SPAN: Record<Variant, string> = {
+  feature: 'sm:col-span-2 row-span-2',
+  photo: 'row-span-1',
+  wide: 'sm:col-span-2 row-span-1',
+  quote: 'row-span-1',
+}
+
+function StoryCard({ post, variant }: { post: BlogPost; variant: Variant }) {
+  const color = categoryColor(post.category)
+  const quote = useMemo(() => storyHighlights(post.content).quote, [post.content])
+
+  if (variant === 'quote') {
+    return (
+      <Link
+        to={`/blog/${post.id}`}
+        className="focus-visible:outline-brand flex size-full flex-col justify-between rounded-[14px] p-6 text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+        style={{ background: color }}
+      >
+        <p className="font-display line-clamp-5 text-[21px] leading-[1.25] font-semibold">
+          “{quote ?? post.excerpt}”
+        </p>
+        <div>
+          <p className="text-[14px] font-semibold">{post.author_name}</p>
+          <p className="mt-0.5 line-clamp-1 text-[13px] text-white/80">{post.title}</p>
+        </div>
+      </Link>
+    )
+  }
+
+  const big = variant === 'feature'
   return (
     <Link
       to={`/blog/${post.id}`}
-      className="group flex flex-col overflow-hidden rounded-xl bg-white shadow-[0px_4px_20px_0px_rgba(26,26,46,0.08)] transition-transform duration-300 hover:-translate-y-1 hover:shadow-[0px_8px_32px_0px_rgba(26,26,46,0.14)]"
+      className="group focus-visible:outline-brand relative block size-full overflow-hidden rounded-[14px] bg-[#10213f] focus-visible:outline-2 focus-visible:outline-offset-2"
     >
-      {/* Cover image */}
-      <div className="relative h-[231px] shrink-0 overflow-hidden">
-        {post.cover_image_url ? (
-          <img
-            src={post.cover_image_url}
-            alt={post.title}
-            className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
-          />
-        ) : (
-          <div
-            className="size-full"
-            style={{ background: 'linear-gradient(135deg, #037ef3 0%, #0250a0 100%)' }}
-          />
-        )}
-        {/* Gradient fade at bottom to cleanly separate image from card content */}
-        <div className="absolute inset-x-0 bottom-0 h-16 bg-linear-to-t from-white/60 to-transparent" />
-        <div className="absolute bottom-3 left-3">
-          <CategoryBadge category={post.category} />
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="flex flex-1 flex-col bg-white px-6 pt-5 pb-0">
-        <h3 className="mb-0 line-clamp-2 text-[16px] leading-[1.45] font-bold text-[#1a1a2e]">
+      {post.cover_image_url ? (
+        <img
+          src={post.cover_image_url}
+          alt=""
+          loading="lazy"
+          className="absolute inset-0 size-full object-cover transition-transform duration-700 group-hover:scale-[1.06]"
+        />
+      ) : (
+        <div className="absolute inset-0 bg-[linear-gradient(140deg,#037ef3,#10213f)]" />
+      )}
+      <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(10,22,44,.92)_0%,rgba(10,22,44,.35)_50%,transparent_75%)]" />
+      <span
+        className="absolute top-4 left-4 rounded-full px-3 py-1 text-[12px] font-semibold text-white"
+        style={{ background: color }}
+      >
+        {post.category}
+      </span>
+      <div className={`absolute inset-x-0 bottom-0 text-white ${big ? 'p-7 md:p-9' : 'p-5'}`}>
+        <h3
+          className={`font-display font-semibold text-balance ${
+            big
+              ? 'text-[30px] leading-[1.08] md:text-[40px]'
+              : 'line-clamp-3 text-[19px] leading-[1.2]'
+          }`}
+        >
           {post.title}
         </h3>
-        <p className="mt-4 mb-0 line-clamp-3 text-[13.5px] leading-[1.65] text-[#6b7280]">
-          {post.excerpt}
-        </p>
-      </div>
-
-      {/* Author row */}
-      <div className="border-surface mx-6 mt-auto flex items-center gap-[10px] border-t py-[17px]">
-        {post.author_avatar_url ? (
-          <img
-            src={post.author_avatar_url}
-            alt={post.author_name}
-            className="size-8 shrink-0 rounded-full border-2 border-[#e5e7eb] object-cover"
-          />
-        ) : (
-          <div className="bg-brand flex size-8 shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-white">
-            {post.author_name.charAt(0)}
-          </div>
+        {big && (
+          <p className="mt-3 line-clamp-2 max-w-[560px] text-[15px] leading-[1.6] text-white/80">
+            {post.excerpt}
+          </p>
         )}
-        <p className="text-[12.5px] leading-[1.3]">
-          <span className="font-semibold text-[#1a1a2e]">{post.author_name}</span>
-          <span className="font-normal text-[#6b7280]">
-            &nbsp;·&nbsp;{formattedDate}&nbsp;·&nbsp;{post.read_time} min read
+        <div className="mt-3 flex items-center gap-2.5 text-[13px] text-white/80">
+          {post.author_avatar_url && (
+            <img
+              src={post.author_avatar_url}
+              alt=""
+              className="size-7 rounded-full border border-white/50 object-cover"
+            />
+          )}
+          <span>
+            <span className="font-semibold text-white">{post.author_name}</span>, {post.read_time}{' '}
+            min read
           </span>
-        </p>
+        </div>
       </div>
     </Link>
-  )
-}
-
-function BlogCardSkeleton() {
-  return (
-    <div className="flex animate-pulse flex-col overflow-hidden rounded-xl bg-white shadow-[0px_4px_20px_0px_rgba(26,26,46,0.08)]">
-      <div className="h-[231px] bg-[#e5e7eb]" />
-      <div className="flex flex-1 flex-col px-6 pt-5 pb-0">
-        <div className="h-5 w-3/4 rounded bg-[#e5e7eb]" />
-        <div className="mt-2 h-4 w-full rounded bg-[#e5e7eb]" />
-        <div className="mt-2 h-4 w-5/6 rounded bg-[#e5e7eb]" />
-        <div className="mt-2 h-4 w-2/3 rounded bg-[#e5e7eb]" />
-      </div>
-      <div className="border-surface mx-6 mt-auto flex items-center gap-3 border-t py-4">
-        <div className="size-8 rounded-full bg-[#e5e7eb]" />
-        <div className="h-4 w-40 rounded bg-[#e5e7eb]" />
-      </div>
-    </div>
   )
 }
 
 /* ─── Page ─── */
 
 export function BlogPage() {
-  const [activeCategory, setActiveCategory] = useState<string>('All')
+  const [chapter, setChapter] = useState<string>('All')
   const [searchTerm, setSearchTerm] = useState('')
-
+  const [viewerAt, setViewerAt] = useState<number | null>(null)
   const { posts: allPosts, loading } = useBlogPosts()
 
-  const filteredPosts = useMemo(() => {
-    return allPosts.filter((post) => {
-      const matchesCategory = activeCategory === 'All' || post.category === activeCategory
-      const matchesSearch =
-        searchTerm.trim() === '' ||
-        post.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        post.excerpt.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        post.author_name.toLowerCase().includes(searchTerm.toLowerCase())
-      return matchesCategory && matchesSearch
-    })
-  }, [allPosts, activeCategory, searchTerm])
+  const latest = useMemo(() => sortStories(allPosts), [allPosts])
+  const home = useMemo(() => homeStories(latest), [latest])
+  const reduced = useReducedMotion()
+
+  const filtered = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase()
+    return latest.filter(
+      (p) =>
+        (chapter === 'All' || p.category === chapter) &&
+        (!q ||
+          p.title.toLowerCase().includes(q) ||
+          p.excerpt.toLowerCase().includes(q) ||
+          p.author_name.toLowerCase().includes(q)),
+    )
+  }, [latest, chapter, searchTerm])
 
   return (
     <>
-      {/* ══ HERO ══ */}
-      <section
-        className="relative overflow-hidden py-[88px]"
-        style={{ background: 'linear-gradient(165deg, #037ef3 0%, #0250a0 100%)' }}
-      >
-        {/* Decorative circles */}
-        <div className="pointer-events-none absolute top-[-60px] right-[92px] size-[280px] rounded-[140px] bg-white/5" />
-        <div className="pointer-events-none absolute bottom-0 left-[-40px] size-[220px] translate-y-1/4 rounded-[110px] bg-white/4" />
-        {/* Decorative accent squares */}
-        <div className="pointer-events-none absolute top-[164px] left-[123px] size-3 rounded-[6px] bg-white/25" />
-        <div className="pointer-events-none absolute top-[82px] right-[192px] size-2 rounded-[4px] bg-white/20" />
+      {/* ══ HERO + STORY RINGS ══ */}
+      <section className="relative overflow-hidden bg-[#10213f] px-6 pt-32 pb-14 text-white md:px-10 md:pt-36">
+        <div className="pointer-events-none absolute -top-40 -right-40 size-[520px] rounded-full bg-[#037ef3]/25 blur-3xl" />
+        <div className="relative mx-auto max-w-[1200px]">
+          <div className="grid grid-cols-[minmax(0,1fr)] items-center gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,500px)] lg:gap-12">
+            <div className="max-w-[640px]">
+              <h1 className="font-display text-[44px] leading-[1.02] font-bold tracking-[-0.02em] sm:text-[60px]">
+                Stories from the people who went.
+              </h1>
+              <p className="mt-5 text-[17px] leading-[1.7] text-white/75">
+                Spin the globe to see where our members have been, tap a face to watch a story in
+                under a minute, or open one below and read it in full.
+              </p>
+              <Link
+                to="/blog/submit"
+                className="mt-8 inline-flex shrink-0 items-center gap-2 rounded-full bg-[#ffc845] px-6 py-3.5 text-[15px] font-semibold text-[#10213f] transition-transform hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ffc845]"
+              >
+                <PenLine size={17} />
+                Write your story
+              </Link>
 
-        <Stagger
-          inView={false}
-          className="relative mx-auto flex max-w-[720px] flex-col items-center gap-0 text-center"
-        >
-          <StaggerItem>
-            <div className="mb-[28px] inline-flex rounded-[24px] border border-white/22 bg-white/12 px-[18px] py-[7px]">
-              <span className="text-[12px] font-semibold tracking-[0.72px] text-white">
-                AIESEC IN COLOMBO SOUTH
-              </span>
+              <ul
+                className="-mx-6 mt-10 flex gap-5 overflow-x-auto px-6 pb-2 md:mx-0 md:px-0"
+                aria-label="Quick stories"
+              >
+                <li className="shrink-0">
+                  <Link
+                    to="/blog/submit"
+                    className="group flex w-[88px] flex-col items-center gap-2 focus-visible:outline-none"
+                  >
+                    <span className="flex size-[84px] items-center justify-center rounded-full border-2 border-dashed border-white/50 text-white transition-colors group-hover:border-[#ffc845] group-hover:text-[#ffc845] group-focus-visible:border-[#ffc845]">
+                      <Plus size={28} />
+                    </span>
+                    <span className="text-[13px] text-white/80">Your story</span>
+                  </Link>
+                </li>
+                {(loading ? [] : latest).map((post, i) => (
+                  <li key={post.id} className="shrink-0">
+                    <button
+                      onClick={() => setViewerAt(i)}
+                      className="group flex w-[88px] flex-col items-center gap-2 focus-visible:outline-none"
+                      aria-label={`Watch ${post.author_name}'s story`}
+                    >
+                      <span
+                        className="rounded-full p-[3px] transition-transform group-hover:scale-105 group-focus-visible:scale-105"
+                        style={{
+                          background: `conic-gradient(from 200deg, ${categoryColor(post.category)}, #037ef3, #ffc845, ${categoryColor(post.category)})`,
+                        }}
+                      >
+                        <span className="block rounded-full border-[3px] border-[#10213f]">
+                          {post.author_avatar_url ? (
+                            <img
+                              src={post.author_avatar_url}
+                              alt=""
+                              className="size-[72px] rounded-full object-cover"
+                            />
+                          ) : (
+                            <span className="flex size-[72px] items-center justify-center rounded-full bg-white/10 text-[22px] font-bold">
+                              {post.author_name.charAt(0)}
+                            </span>
+                          )}
+                        </span>
+                      </span>
+                      <span className="w-full truncate text-center text-[13px] text-white/90">
+                        {post.author_name.split(' ')[0]}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+                {loading &&
+                  [0, 1, 2, 3, 4].map((i) => (
+                    <li
+                      key={i}
+                      className="size-[84px] shrink-0 animate-pulse rounded-full bg-white/10"
+                    />
+                  ))}
+              </ul>
             </div>
-          </StaggerItem>
-
-          <StaggerItem>
-            <h1 className="text-[52px] leading-[1.18] font-extrabold tracking-[-0.52px] text-white">
-              Our Stories &amp; Insights
-            </h1>
-          </StaggerItem>
-
-          <StaggerItem>
-            <p className="mt-[20px] max-w-[560px] text-[18px] leading-[1.7] text-white/80">
-              Experiences, leadership journeys, and updates from AIESEC in Colombo South — stories
-              that inspire, connect, and move the world forward.
-            </p>
-          </StaggerItem>
-        </Stagger>
+            <StoryGlobe
+              posts={latest}
+              onOpen={(post) => setViewerAt(latest.findIndex((p) => p.id === post.id))}
+              homeCount={home.length}
+              onHome={() =>
+                document
+                  .getElementById('home-journey')
+                  ?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' })
+              }
+            />
+          </div>
+        </div>
       </section>
 
-      {/* ══ FILTER & SEARCH BAR ══ */}
-      <section className="sticky top-0 z-20 border-b border-[#f0f1f5] bg-white shadow-[0px_2px_6px_rgba(0,0,0,0.04)]">
-        <div className="mx-auto flex max-w-[1280px] flex-col gap-4 px-8 pt-5 pb-px">
-          {/* Category pills */}
-          <div className="flex flex-wrap gap-[10px]">
-            {CATEGORIES.map((cat) => {
-              const isActive = activeCategory === cat
+      {/* ══ AIESEC JOURNEYS AT HOME ══ */}
+      {!loading && home.length > 0 && <HomeJourney posts={home} />}
+
+      {/* ══ FILTERS ══ */}
+      <section className="border-b border-[#e1e9f5] bg-white">
+        <div className="mx-auto flex max-w-[1200px] flex-col gap-3 px-6 py-4 md:flex-row md:items-center md:justify-between md:px-10">
+          <div
+            className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 md:pb-0"
+            role="tablist"
+            aria-label="Story topics"
+          >
+            {STORY_CHAPTERS.map((c) => {
+              const active = chapter === c
+              const color = c === 'All' ? '#10213f' : categoryColor(c)
               return (
                 <button
-                  key={cat}
-                  onClick={() => setActiveCategory(cat)}
-                  className={[
-                    'rounded-[24px] border px-[21px] py-[9px] text-[13px] leading-normal font-semibold transition-all duration-200',
-                    isActive
-                      ? 'border-brand bg-brand text-white drop-shadow-[0px_4px_7px_rgba(3,126,243,0.3)]'
-                      : 'border-brand text-brand hover:bg-brand/5 bg-white',
-                  ].join(' ')}
+                  key={c}
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setChapter(c)}
+                  className="focus-visible:outline-brand flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-[13px] font-medium whitespace-nowrap transition-colors focus-visible:outline-2"
+                  style={
+                    active
+                      ? { background: color, borderColor: color, color: 'white' }
+                      : { borderColor: '#d7e3f4', color: '#10213f' }
+                  }
                 >
-                  {cat}
+                  {c !== 'All' && (
+                    <span
+                      className="size-2 rounded-full"
+                      style={{ background: active ? 'white' : color }}
+                    />
+                  )}
+                  {c === 'All' ? 'All stories' : c}
                 </button>
               )
             })}
           </div>
-
-          {/* Search */}
-          <div className="flex justify-center pb-[20px]">
-            <div className="relative w-[520px]">
-              <Search
-                size={17}
-                className="pointer-events-none absolute top-1/2 left-[16px] -translate-y-1/2 text-[#1a1a2e]/40"
-              />
-              <input
-                type="text"
-                placeholder="Search articles…"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="focus:border-brand focus:ring-brand/20 h-[45px] w-full rounded-[12px] border border-[#e5e7eb] bg-[#fafafa] pr-4 pl-[44px] text-[14px] text-[#1a1a2e] placeholder:text-[#1a1a2e]/50 focus:ring-2 focus:outline-none"
-              />
-            </div>
-          </div>
+          <label className="relative block md:w-[280px]">
+            <span className="sr-only">Search stories</span>
+            <Search
+              size={16}
+              className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-[#10213f]/40"
+            />
+            <input
+              type="search"
+              placeholder="Search by title or author"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="focus:border-brand focus:ring-brand/20 h-10 w-full rounded-full border border-[#d7e3f4] bg-[#f6f9fe] pr-4 pl-10 text-[16px] text-[#10213f] placeholder:text-[#10213f]/45 focus:ring-2 focus:outline-none md:text-[14px]"
+            />
+          </label>
         </div>
       </section>
 
-      {/* ══ ARTICLES GRID ══ */}
-      <section className="bg-surface px-8 pt-14 pb-20">
-        <div className="mx-auto max-w-[1280px]">
-          {/* Count */}
-          {!loading && (
-            <p className="mb-8 text-[14px] text-[#6b7280]">
-              Showing <span className="font-bold text-[#1a1a2e]">{filteredPosts.length}</span>{' '}
-              {filteredPosts.length === 1 ? 'article' : 'articles'}
-            </p>
-          )}
-
+      {/* ══ STORY WALL ══ */}
+      <section className="bg-[#f3f7fd] px-6 pt-12 pb-20 md:px-10">
+        <div className="mx-auto max-w-[1200px]">
           {loading ? (
-            <div className="grid grid-cols-1 gap-[23px] sm:grid-cols-2 lg:grid-cols-3">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <BlogCardSkeleton key={i} />
+            <div className="grid auto-rows-[260px] grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <div
+                  key={i}
+                  className={`animate-pulse rounded-[14px] bg-white ${i === 0 ? 'row-span-2 sm:col-span-2' : ''}`}
+                />
               ))}
             </div>
-          ) : filteredPosts.length > 0 ? (
-            <AnimatePresence mode="wait">
-              <Stagger
-                key={`${activeCategory}-${searchTerm}`}
-                className="grid grid-cols-1 gap-[23px] sm:grid-cols-2 lg:grid-cols-3"
-              >
-                {filteredPosts.map((post) => (
-                  <StaggerItem key={post.id}>
-                    <BlogCard post={post} />
-                  </StaggerItem>
-                ))}
-              </Stagger>
-            </AnimatePresence>
-          ) : (
-            <div className="flex flex-col items-center gap-4 py-24 text-center">
-              <div className="bg-brand/10 flex size-16 items-center justify-center rounded-full">
-                <Search size={28} className="text-brand" />
-              </div>
-              <p className="text-[18px] font-semibold text-[#1a1a2e]">No articles found</p>
-              <p className="max-w-xs text-[14px] text-[#6b7280]">
-                Try a different search term or select a different category.
+          ) : filtered.length === 0 ? (
+            <div className="mx-auto max-w-[460px] py-16 text-center">
+              <p className="font-display text-[26px] font-semibold text-[#10213f]">
+                Nothing here yet
               </p>
-              <button
-                onClick={() => {
-                  setActiveCategory('All')
-                  setSearchTerm('')
-                }}
-                className="bg-brand hover:bg-brand-dark mt-2 rounded-lg px-6 py-2.5 text-[14px] font-semibold text-white transition-colors"
-              >
-                Clear filters
-              </button>
+              <p className="mt-2 text-[15px] text-[#10213f]/70">
+                No stories match that search. Clear it, or be the first to write one on this topic.
+              </p>
+              <div className="mt-6 flex justify-center gap-3">
+                <button
+                  onClick={() => {
+                    setChapter('All')
+                    setSearchTerm('')
+                  }}
+                  className="rounded-full border border-[#d7e3f4] bg-white px-5 py-2.5 text-[14px] font-semibold text-[#10213f]"
+                >
+                  Show all stories
+                </button>
+                <Link
+                  to="/blog/submit"
+                  className="bg-brand rounded-full px-5 py-2.5 text-[14px] font-semibold text-white"
+                >
+                  Write your story
+                </Link>
+              </div>
             </div>
+          ) : (
+            <motion.div
+              layout
+              className="grid grid-flow-dense auto-rows-[260px] grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4"
+            >
+              <AnimatePresence mode="popLayout">
+                {filtered.map((post, i) => {
+                  const v = variantFor(i)
+                  return (
+                    <motion.div
+                      key={post.id}
+                      layout
+                      initial={{ opacity: 0, scale: 0.94 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.94 }}
+                      transition={{ duration: 0.3 }}
+                      className={SPAN[v]}
+                    >
+                      <Tilt className="size-full rounded-[14px]">
+                        <StoryCard post={post} variant={v} />
+                      </Tilt>
+                    </motion.div>
+                  )
+                })}
+                {chapter === 'All' && !searchTerm && (
+                  <motion.div key="write-tile" layout className="sm:col-span-2">
+                    <Link
+                      to="/blog/submit"
+                      className="group flex size-full flex-col justify-between rounded-[14px] border-2 border-dashed border-[#10213f]/25 bg-white p-6 transition-colors hover:border-[#037ef3] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#037ef3]"
+                    >
+                      <span className="flex size-12 items-center justify-center rounded-full bg-[#ffc845] text-[#10213f]">
+                        <Plus size={22} />
+                      </span>
+                      <div>
+                        <p className="font-display text-[26px] leading-[1.1] font-semibold text-[#10213f]">
+                          This spot is saved for your story.
+                        </p>
+                        <p className="mt-2 text-[14px] text-[#10213f]/65 group-hover:text-[#037ef3]">
+                          Write your story
+                        </p>
+                      </div>
+                    </Link>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
           )}
 
-          {/* Contributor Portal Footer Note */}
-          <div className="mt-16 border-t border-[#e5e7eb] pt-8 text-center">
-            <p className="text-[14px] text-[#6b7280]">
-              Are you an exchange participant or member?{' '}
-              <Link
-                to="/blog/submit"
-                className="text-brand font-semibold hover:underline inline-flex items-center gap-1"
-              >
-                Share your journey in our Contributor Portal &rarr;
-              </Link>
+          {!loading && filtered.length > 0 && (
+            <p className="mt-6 text-[13px] text-[#10213f]/55">
+              {filtered.length} {filtered.length === 1 ? 'story' : 'stories'}, newest first. Latest
+              on {formatStoryDate(filtered[0], 'long')}.
             </p>
-          </div>
+          )}
         </div>
       </section>
+
+      {/* ══ WRITE ══ */}
+      <section className="bg-[#10213f] px-6 py-20 text-white md:px-10">
+        <div className="mx-auto grid max-w-[1200px] gap-10 lg:grid-cols-[1fr_1.2fr] lg:items-center">
+          <div>
+            <h2 className="font-display text-[36px] leading-[1.08] font-bold md:text-[48px]">
+              Everyone here has one story worth telling.
+            </h2>
+            <p className="mt-4 max-w-[480px] text-[16px] leading-[1.7] text-white/70">
+              You don't need to be a writer. Pick one moment, tell it honestly, and our team will
+              help with editing and photos before it goes live.
+            </p>
+            <Link
+              to="/blog/submit"
+              className="mt-8 inline-flex items-center gap-2 rounded-full bg-[#ffc845] px-7 py-3.5 text-[15px] font-semibold text-[#10213f] transition-transform hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ffc845]"
+            >
+              <PenLine size={17} />
+              Write your story
+            </Link>
+          </div>
+          <ul className="grid gap-3">
+            <li className="text-[14px] text-white/60">Stuck on how to start? Try one of these:</li>
+            {WRITING_PROMPTS.map((prompt, i) => (
+              <li key={prompt}>
+                <Link
+                  to="/blog/submit"
+                  className="flex items-center gap-4 rounded-[12px] border border-white/15 bg-white/5 p-5 text-[16px] transition-colors hover:border-[#ffc845] hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-[#ffc845]"
+                  style={{ marginLeft: `${i * 24}px` }}
+                >
+                  <PenLine size={18} className="shrink-0 text-[#ffc845]" />
+                  {prompt}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      <AnimatePresence>
+        {viewerAt !== null && latest.length > 0 && (
+          <StoryViewer posts={latest} startIndex={viewerAt} onClose={() => setViewerAt(null)} />
+        )}
+      </AnimatePresence>
     </>
   )
 }

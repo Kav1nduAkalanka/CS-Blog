@@ -1,4 +1,5 @@
 /* ── Poppins — professional, modern sans-serif used in the Figma design ── */
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500&display=swap');
 @import 'tailwindcss';
 @plugin '@tailwindcss/typography';
@@ -6,6 +7,7 @@
 @theme {
   /* Override Tailwind's default sans stack so Poppins applies globally */
   --font-sans: 'Poppins', system-ui, -apple-system, sans-serif;
+  --font-display: 'Bricolage Grotesque', 'Poppins', system-ui, sans-serif;
   --font-poppins: 'Poppins', system-ui, -apple-system, sans-serif;
 
   /* Brand colours */
@@ -57,4 +59,103 @@ body {
 
 @utility transform-3d {
   transform-style: preserve-3d;
+}
+
+/* ── Story body (blog article content from the editor) ── */
+
+.story-body {
+  color: #1c2c48;
+  font-size: 18px;
+  line-height: 1.85;
+}
+.story-body > * + * {
+  margin-top: 1.4em;
+}
+.story-body p {
+  margin: 0;
+}
+.story-body > p + p {
+  margin-top: 1.1em;
+}
+.story-body a {
+  color: var(--story-accent, #037ef3);
+  text-underline-offset: 3px;
+}
+.story-body strong {
+  color: #10213f;
+}
+.story-body h3 {
+  font-family: var(--font-display);
+  font-size: 24px;
+  line-height: 1.2;
+  color: #10213f;
+  margin-top: 2em;
+}
+.story-intro > p:first-child::first-letter {
+  float: left;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 4.6em;
+  line-height: 0.8;
+  margin: 0.08em 0.12em 0 0;
+  color: var(--story-accent, #037ef3);
+}
+/* photos break out of the text column, to the right only: the chapter rail
+   sits on the left, and from xl the grid keeps an empty 120px column on the
+   right (see BlogArticlePage) */
+.story-body img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 2.6em 0;
+  border-radius: 14px;
+  box-shadow: 0 30px 60px -30px rgba(16, 33, 63, 0.55);
+}
+@media (min-width: 1280px) {
+  .story-body img {
+    width: calc(100% + 120px);
+    max-width: none;
+  }
+}
+.story-body iframe {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: 14px;
+  margin: 2.6em 0;
+}
+/* quotes become big pull quotes */
+.story-body blockquote,
+.story-body .blog-pull-quote {
+  position: relative;
+  margin: 3em 0;
+  padding: 0.2em 0 0 0;
+  border: 0;
+  font-family: var(--font-display);
+  font-size: clamp(26px, 3.4vw, 36px);
+  line-height: 1.22;
+  font-weight: 600;
+  font-style: normal;
+  color: var(--story-accent, #037ef3);
+  text-wrap: balance;
+}
+.story-body blockquote::before,
+.story-body .blog-pull-quote::before {
+  content: '“';
+  display: block;
+  font-size: 3.2em;
+  line-height: 0.6;
+  height: 0.42em;
+  opacity: 0.35;
+}
+.story-body blockquote p {
+  margin: 0;
+}
+.story-body ul,
+.story-body ol {
+  padding-left: 1.3em;
+}
+.story-body li + li {
+  margin-top: 0.4em;
 }

@@ -1,13 +1,38 @@
 import { images } from '../assets/images'
 
+/*
+ * Sample stories used when Supabase is not configured.
+ * Content is written in the same shape the admin editor produces: <h2> chapters,
+ * <img> photos and <blockquote> quotes, so the story layout can be previewed locally.
+ */
+
+const img = (src: string, alt: string) => `<img src="${src}" alt="${alt}">`
+
 export const STATIC_BLOG_POSTS = [
   {
     id: '1',
     title: 'My 6 Weeks in Germany: A Global Volunteer Story That Changed My Life',
     excerpt:
       'I arrived in Berlin with just a suitcase and a heart full of nerves. Six weeks later, I left with friendships that span continents, skills I never expected, and a completely new perspective on what it means to contribute to the world.',
-    content:
-      '<p>I arrived in Berlin with just a suitcase and a heart full of nerves. Six weeks later, I left with friendships that span continents, skills I never expected, and a completely new perspective on what it means to contribute to the world.</p>',
+    content: [
+      '<p>I arrived in Berlin with just a suitcase and a heart full of nerves. I had practised the German word for "thank you" about a hundred times on the plane, and I still said it wrong to the first person who helped me with my bag.</p>',
+      '<p>Six weeks later, I left with friendships that span continents, skills I never expected, and a completely new perspective on what it means to contribute to the world.</p>',
+      '<h2>The first week: everything is new</h2>',
+      '<p>Our project was with a community centre that ran afternoon programmes for refugee children. There were eleven of us volunteers from nine countries, sharing two apartments and one very small kitchen.</p>',
+      img(
+        images.gallery.volunteer1,
+        'Volunteers from nine countries on the first day of the project',
+      ),
+      '<p>The first few days were a blur of train maps, grocery stores where I could not read a single label, and late-night conversations with people whose lives looked nothing like mine.</p>',
+      '<h2>Learning to teach without a shared language</h2>',
+      '<p>Most of the kids spoke Arabic, Dari or Ukrainian. Very few spoke English. I quickly learned that drawing, football and a lot of exaggerated facial expressions can carry a lesson further than words.</p>',
+      '<blockquote><p>The day a seven-year-old girl taught me to count to ten in Dari, I realised the classroom went both ways.</p></blockquote>',
+      img(images.gallery.teaching, 'An afternoon session at the community centre'),
+      '<p>By week three we had a routine: maths games at four, art at five, and a football match that nobody ever wanted to end.</p>',
+      '<h2>Coming home different</h2>',
+      '<p>Back in Colombo, I notice things I used to walk past. I listen more. I am slower to judge. And I have a WhatsApp group with people in eight time zones who still send each other good-morning messages.</p>',
+      '<p>If you are thinking about going on exchange and the only thing stopping you is fear, go anyway. The fear is the point.</p>',
+    ].join(''),
     category: 'Exchange Experiences',
     cover_image_url: images.blogGvGermany,
     author_name: 'Dilini Perera',
@@ -24,8 +49,15 @@ export const STATIC_BLOG_POSTS = [
     title: 'What AIESEC Taught Me About Leading Without Authority',
     excerpt:
       "Leadership isn't about a title — it's about influence, empathy, and the courage to act when no one is watching. Here's how two years in AIESEC reshaped my entire understanding of what it means to lead.",
-    content:
-      "<p>Leadership isn't about a title — it's about influence, empathy, and the courage to act when no one is watching.</p>",
+    content: [
+      "<p>Leadership isn't about a title. It's about influence, empathy, and the courage to act when no one is watching.</p>",
+      '<h2>The project nobody owned</h2>',
+      '<p>In my first year, our partnership drive had no clear owner. Everyone assumed someone else was handling it. I was not a team leader, but I started a spreadsheet, booked a room and asked five people to join me for one hour.</p>',
+      '<blockquote><p>Nobody gave me permission. I just stopped waiting for it.</p></blockquote>',
+      img(images.gallery.team, 'Our team after the partnership drive'),
+      '<h2>What actually works</h2>',
+      '<p>Listening first. Giving credit loudly and taking blame quietly. Making the next step small and obvious. None of it needs a title.</p>',
+    ].join(''),
     category: 'Leadership',
     cover_image_url: images.blogLeadingAuthority,
     author_name: 'Tharindu Silva',
@@ -42,8 +74,17 @@ export const STATIC_BLOG_POSTS = [
     title: 'Breaking Out of My Comfort Zone: The Exchange That Redefined Who I Am',
     excerpt:
       "I used to think I was too introverted for international experiences. Then I applied for AIESEC's Global Volunteer program almost on a whim — and spent 8 weeks in Costa Rica that fundamentally changed my relationship with discomfort.",
-    content:
+    content: [
       "<p>I used to think I was too introverted for international experiences. Then I applied for AIESEC's Global Volunteer program almost on a whim.</p>",
+      '<h2>Saying yes before I was ready</h2>',
+      '<p>I submitted the application at 1 a.m. and regretted it by breakfast. Three weeks later I had a visa appointment and a host family in a town I could not pronounce.</p>',
+      img(images.gallery.volunteer2, 'The town where I spent eight weeks'),
+      '<h2>Discomfort, every single day</h2>',
+      '<p>Ordering food. Asking for directions. Presenting to a room of local teachers in broken Spanish. Each one felt impossible, and each one got a little easier.</p>',
+      '<blockquote><p>Being an introvert did not stop me. It just meant I needed a quiet hour at the end of each loud day.</p></blockquote>',
+      '<h2>Who I came back as</h2>',
+      '<p>I still love my quiet evenings. But I no longer let "I am not that kind of person" make my decisions for me.</p>',
+    ].join(''),
     category: 'Personal Development',
     cover_image_url: images.blogComfortZone,
     author_name: 'Nimasha Fernando',
@@ -60,8 +101,15 @@ export const STATIC_BLOG_POSTS = [
     title: 'LEAD Summit 2026: Highlights From Our Biggest Event of the Year',
     excerpt:
       'Over 300 students. 18 speakers. Two days of workshops, panels, and collaborative projects. LEAD Summit 2026 was more than an event — it was a movement.',
-    content:
+    content: [
       '<p>Over 300 students. 18 speakers. Two days of workshops, panels, and collaborative projects.</p>',
+      '<h2>Day one: the big ideas</h2>',
+      '<p>The opening panel asked a simple question: what would you build if you knew you could not fail? The answers filled three whiteboards.</p>',
+      img(images.gallery.leadSummit, 'The main hall on day one of LEAD Summit'),
+      '<h2>Day two: getting hands-on</h2>',
+      '<p>Teams of six had four hours to design a project for a real local partner. Two of those projects are now running.</p>',
+      '<blockquote><p>I came for the certificate. I left with a team and a plan.</p></blockquote>',
+    ].join(''),
     category: 'Events & Announcements',
     cover_image_url: images.blogLeadSummit,
     author_name: 'Kaveen Jayawardena',
@@ -78,8 +126,15 @@ export const STATIC_BLOG_POSTS = [
     title: 'From Freshman to Team Leader: My Unexpected Journey With AIESEC CS',
     excerpt:
       "I joined AIESEC in my first week of university because a senior told me to. I had no idea what I was signing up for. Two years and four roles later, I'm leading a team of 12.",
-    content:
+    content: [
       '<p>I joined AIESEC in my first week of university because a senior told me to. I had no idea what I was signing up for.</p>',
+      '<h2>Year one: saying yes to everything</h2>',
+      '<p>I volunteered for every event, carried a lot of chairs, and learned how an organisation actually runs.</p>',
+      img(images.gallery.host, 'Setting up for my first AIESEC event'),
+      '<h2>Year two: leading twelve people</h2>',
+      '<p>The hardest part was not the work. It was learning that my job was now to help other people do theirs.</p>',
+      '<blockquote><p>Leading a team is mostly listening, then removing whatever is in their way.</p></blockquote>',
+    ].join(''),
     category: 'Member Stories',
     cover_image_url: images.blogFreshmanLeader,
     author_name: 'Isuri Wickramasinghe',
@@ -96,7 +151,17 @@ export const STATIC_BLOG_POSTS = [
     title: 'Teaching in Rural Nepal: How One Month Completely Changed My Worldview',
     excerpt:
       'When I landed in Kathmandu, I thought I was going there to make a difference. By the time I left, I understood that the students I was supposed to be teaching had given me far more than I could ever give them.',
-    content: '<p>When I landed in Kathmandu, I thought I was going there to make a difference.</p>',
+    content: [
+      '<p>When I landed in Kathmandu, I thought I was going there to make a difference.</p>',
+      '<h2>Six hours up the mountain</h2>',
+      '<p>The school was a bus ride and a two-hour walk from the nearest town. Forty students, three classrooms and one very determined headteacher.</p>',
+      img(images.gallery.volunteer3, 'The walk up to the school'),
+      '<h2>What they taught me</h2>',
+      '<p>They walked an hour each way to get to class, and arrived smiling. They shared lunch with whoever had forgotten theirs. They asked better questions than any lecture hall I had sat in.</p>',
+      '<blockquote><p>I went to teach English. I came back having learned patience, gratitude and how to laugh at myself.</p></blockquote>',
+      '<h2>Still in touch</h2>',
+      '<p>Every few months the headteacher sends photos. The library we started now has 300 books.</p>',
+    ].join(''),
     category: 'Global Impact',
     cover_image_url: images.blogNepalTeaching,
     author_name: 'Ravindu Bandara',
@@ -106,6 +171,70 @@ export const STATIC_BLOG_POSTS = [
     published_at: '2026-04-05T00:00:00.000Z',
     created_at: '2026-04-05T00:00:00.000Z',
     updated_at: '2026-04-05T00:00:00.000Z',
+    created_by: null,
+  },
+  {
+    id: '7',
+    title: 'Eight Weeks in Cambodia: The Village That Taught Me How to Teach',
+    excerpt:
+      'I signed up to teach English in a village outside Siem Reap. I got rice fields, a classroom on stilts, a bout of homesickness I was not ready for, and thirty-two kids who changed what I think teaching is.',
+    content: [
+      '<p>The night before I left, my mother packed a whole jar of seeni sambol into my suitcase and told me nobody in Cambodia would know how to cook properly. She was wrong about that, but she was right about almost everything else.</p>',
+      img(images.gallery.volunteer1, 'Saying goodbye at Bandaranaike International Airport'),
+      '<p>I had never been away from home for more than four days. I was twenty, in my second year at Moratuwa, and I had applied for the Global Volunteer programme after one AIESEC info session and a lot of late-night scrolling. Eight weeks felt like a lifetime. It turned out to be far too short.</p>',
+      '<h2>Landing in Siem Reap</h2>',
+      '<p>The first thing that hits you is the heat. Colombo is hot, so I thought I was ready. I was not. The second thing is the noise: tuk-tuks, scooters carrying entire families, and market sellers who somehow knew I was Sri Lankan before I opened my mouth.</p>',
+      img(
+        images.gallery.host,
+        'Our volunteer group on the first evening, before anyone knew anyone',
+      ),
+      '<p>Our AIESEC buddy, Sokha, met us at the airport with a cardboard sign and a bag of mangoes. There were fourteen volunteers from eight countries: Brazil, Germany, Egypt, India, Indonesia, Türkiye, Mexico and me, the only one from Sri Lanka.</p>',
+      "<p>That first night we sat on the floor of the volunteer house, sharing snacks from home and trying to pronounce each other's names. The German volunteer had brought chocolate that melted before we could open it. My seeni sambol was gone in ten minutes.</p>",
+      '<blockquote><p>By midnight, fourteen strangers were laughing at the same jokes. That was when I stopped being scared.</p></blockquote>',
+      '<h2>The village at the end of the red road</h2>',
+      '<p>Every morning at six, we climbed into the back of a truck and drove forty minutes down a red dirt road to a village called Prey Chruk. The school was three wooden classrooms built on stilts, with a water pump, a football that had seen better days and a headteacher named Mr Vannak who smiled at absolutely everything.</p>',
+      img(
+        images.gtVolunteerTeaching,
+        'Prey Chruk village, where the school stood beside the rice fields',
+      ),
+      '<p>I was given the grade four class: thirty-two children aged between nine and thirteen. Some had never had a foreign teacher before. Some had had six, one after another, each leaving after a few weeks. They looked at me the way you look at a bus you are not sure is going to stop.</p>',
+      img(images.gvVolunteer1, 'Morning assembly, before the heat arrived'),
+      '<p>On the first day I had a lesson plan for colours, with flashcards I had printed at the shop near my university. I got through two cards before a boy at the back asked, in perfect English, whether Sri Lanka had elephants. The rest of the lesson was about elephants.</p>',
+      '<h2>Teaching without a shared language</h2>',
+      '<p>I spoke no Khmer. Most of my students spoke very little English. For the first week, I felt like I was failing every single day. My lesson plans fell apart within minutes, and I went back to the volunteer house exhausted and quiet.</p>',
+      img(images.gtHeroClassroom, 'Grade four, the class that taught me more than I taught them'),
+      '<p>Then I stopped trying to teach the way I had been taught. I started drawing everything. I acted out verbs until the whole class was crying with laughter. We sang the same song about the days of the week so many times that the kids in the next classroom started singing it too.</p>',
+      '<blockquote><p>The day Srey Mom wrote her first full sentence in English, she ran to show the headteacher before she showed me. I have never been so happy to be second.</p></blockquote>',
+      "<p>In week four, the volunteers decided the school needed colour. We spent three Saturdays painting a mural on the outside wall: a map of the world with every volunteer's country marked, and a big red line from each one to Cambodia.</p>",
+      img(images.gvVolunteer2, 'Painting the world map on the school wall, one Saturday at a time'),
+      '<p>The kids insisted on painting Sri Lanka themselves. It came out about the size of Australia. I did not correct them.</p>',
+      '<h2>The week everything went wrong</h2>',
+      '<p>Nobody tells you about week five. The excitement had worn off, the rains had started, and I caught a fever that kept me in bed for three days. I missed home so badly that I called my mother every evening and said nothing, just listened to the sound of the house behind her.</p>',
+      img(images.gallery.teaching, 'The long walk back on the evening I almost decided to go home'),
+      '<p>On the fourth day, I seriously looked at flights back to Colombo. I had the booking page open. Then Sokha knocked on my door with rice porridge and a stack of paper. My students had made me get-well cards. Thirty-two of them. One just said “Teacher come back” with a drawing of an elephant.</p>',
+      '<p>"Homesickness is not a sign you made the wrong choice. It is a sign you have something worth going back to."</p>',
+      '<p>Sokha told me that, sitting on the end of my bed. I closed the booking page and was back in the classroom on Monday.</p>',
+      '<h2>Saying goodbye</h2>',
+      '<p>The last week went too fast. We held a small sports day, with a three-legged race that ended in a pile of children and volunteers in the mud. Mr Vannak gave a speech in Khmer that made the local teachers cry, and then one in English that made us cry.</p>',
+      img(images.gvHeroBg, 'The last afternoon with my students'),
+      '<p>On the final day, my class gave me a bracelet made of red thread. Srey Mom tied it on herself and told me it meant I had to come back. It is still on my wrist as I write this, faded almost to pink.</p>',
+      '<blockquote><p>I came to teach thirty-two children. I left with thirty-two reasons to believe that small things matter.</p></blockquote>',
+      '<h2>Back in Colombo</h2>',
+      '<p>Coming home was strange. Everything was the same, but I was not. I noticed how much I used to rush. I noticed people I had walked past for years. I started volunteering on weekends at a reading programme in Moratuwa, because I could not stop thinking about how much a little attention can change.</p>',
+      img(images.gallery.team, 'Our first meetup with the other returnees, back home in Colombo'),
+      '<p>If you are thinking about going on exchange, here is what I would tell you:</p>',
+      '<ul><li>Pack fewer clothes and more snacks from home. They are the fastest way to make friends.</li><li>Your lesson plan will fall apart. That is where the real teaching starts.</li><li>Week five is hard for everyone. Stay for week six.</li><li>Write things down every night. You will forget more than you think.</li></ul>',
+      '<p>Eight weeks. Fourteen friends. Thirty-two students. One red thread bracelet. If you are scared to go, go anyway. The fear is how you know it matters.</p>',
+    ].join(''),
+    category: 'Exchange Experiences',
+    cover_image_url: images.gvVolunteer3,
+    author_name: 'Sithara Gunawardena',
+    author_avatar_url: images.gvAlumniSithara,
+    read_time: 11,
+    status: 'published',
+    published_at: '2026-04-12T00:00:00.000Z',
+    created_at: '2026-04-12T00:00:00.000Z',
+    updated_at: '2026-04-12T00:00:00.000Z',
     created_by: null,
   },
 ] as const
