@@ -1,300 +1,282 @@
-import { useState, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Search } from 'lucide-react'
-import { AnimatePresence } from 'motion/react'
-import { useBlogPosts } from '../hooks/useBlogPosts'
+import { AnimatePresence, motion } from 'motion/react'
+import { DoorOpen, PenLine, Search } from 'lucide-react'
 import type { BlogPost } from '../lib/database.types'
-import { Stagger, StaggerItem } from '../components/motion/Stagger'
+import { useBlogPosts } from '../hooks/useBlogPosts'
+import { useReducedMotion } from '../hooks/useReducedMotion'
+import { StoryViewer } from '../components/blog/StoryViewer'
+import { StoryGlobe } from '../components/blog/StoryGlobe'
+import { ExhibitionHall } from '../components/blog/ExhibitionHall'
+import { WriteDrawer } from '../components/blog/WriteDrawer'
+import { groupByDestination } from '../components/blog/destinations'
+import {
+  STORY_CHAPTERS,
+  categoryColor,
+  formatStoryDate,
+  sortStories,
+} from '../components/blog/storyUtils'
 
-/* ─── Data ─── */
-
-const CATEGORIES = [
-  'All',
-  'Exchange Experiences',
-  'Leadership',
-  'Personal Development',
-  'Events & Announcements',
-  'Member Stories',
-  'Global Impact',
-] as const
-
-const CATEGORY_COLORS: Record<string, string> = {
-  'Exchange Experiences': '#00bfa5',
-  Leadership: '#037ef3',
-  'Personal Development': '#7b2fbe',
-  'Events & Announcements': '#ff6b35',
-  'Member Stories': '#00c853',
-  'Global Impact': '#3d5afe',
+const VIEW_KEY = 'cs-hall-view'
+const readListMode = () => {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'list'
+  } catch {
+    return false
+  }
 }
 
-/* ─── Sub-components ─── */
-
-function CategoryBadge({ category }: { category: string }) {
-  const color = CATEGORY_COLORS[category] ?? '#037ef3'
-  return (
-    <span
-      className="inline-block rounded-[20px] px-[10px] py-[4px] text-[11px] font-semibold tracking-[0.33px] text-white drop-shadow-[0px_2px_4px_rgba(0,0,0,0.18)]"
-      style={{ backgroundColor: color }}
-    >
-      {category}
-    </span>
-  )
-}
-
-function BlogCard({ post }: { post: BlogPost }) {
-  const formattedDate = new Date(post.published_at ?? post.created_at).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
-
+function StoryCard({ post }: { post: BlogPost }) {
+  const color = categoryColor(post.category)
   return (
     <Link
       to={`/blog/${post.id}`}
-      className="group flex flex-col overflow-hidden rounded-xl bg-white shadow-[0px_4px_20px_0px_rgba(26,26,46,0.08)] transition-transform duration-300 hover:-translate-y-1 hover:shadow-[0px_8px_32px_0px_rgba(26,26,46,0.14)]"
+      className="group block overflow-hidden rounded-[18px] bg-white shadow-[0_1px_2px_rgba(11,26,51,.06),0_20px_40px_-28px_rgba(11,26,51,.45)] transition-[transform,box-shadow] duration-300 hover:-translate-y-1 hover:shadow-[0_1px_2px_rgba(11,26,51,.06),0_28px_50px_-26px_rgba(11,26,51,.55)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#037ef3]"
     >
-      {/* Cover image */}
-      <div className="relative h-[231px] shrink-0 overflow-hidden">
+      <span className="block aspect-[4/3] overflow-hidden bg-[#0b1a33]">
         {post.cover_image_url ? (
           <img
             src={post.cover_image_url}
-            alt={post.title}
-            className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
+            alt=""
+            loading="lazy"
+            className="size-full object-cover transition-transform duration-700 group-hover:scale-[1.04]"
           />
         ) : (
-          <div
-            className="size-full"
-            style={{ background: 'linear-gradient(135deg, #037ef3 0%, #0250a0 100%)' }}
-          />
+          <span className="block size-full bg-[linear-gradient(140deg,#037ef3,#0b1a33)]" />
         )}
-        {/* Gradient fade at bottom to cleanly separate image from card content */}
-        <div className="absolute inset-x-0 bottom-0 h-16 bg-linear-to-t from-white/60 to-transparent" />
-        <div className="absolute bottom-3 left-3">
-          <CategoryBadge category={post.category} />
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="flex flex-1 flex-col bg-white px-6 pt-5 pb-0">
-        <h3 className="mb-0 line-clamp-2 text-[16px] leading-[1.45] font-bold text-[#1a1a2e]">
+      </span>
+      <span className="block p-5">
+        <span
+          className="flex items-center gap-1.5 text-[11px] font-bold tracking-[0.14em] uppercase"
+          style={{ color }}
+        >
+          <span className="size-1.5 rounded-full" style={{ background: color }} />
+          {post.category}
+        </span>
+        <span className="font-display mt-2 line-clamp-2 block text-[20px] leading-[1.2] font-semibold text-balance text-[#0b1a33]">
           {post.title}
-        </h3>
-        <p className="mt-4 mb-0 line-clamp-3 text-[13.5px] leading-[1.65] text-[#6b7280]">
-          {post.excerpt}
-        </p>
-      </div>
-
-      {/* Author row */}
-      <div className="border-surface mx-6 mt-auto flex items-center gap-[10px] border-t py-[17px]">
-        {post.author_avatar_url ? (
-          <img
-            src={post.author_avatar_url}
-            alt={post.author_name}
-            className="size-8 shrink-0 rounded-full border-2 border-[#e5e7eb] object-cover"
-          />
-        ) : (
-          <div className="bg-brand flex size-8 shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-white">
-            {post.author_name.charAt(0)}
-          </div>
-        )}
-        <p className="text-[12.5px] leading-[1.3]">
-          <span className="font-semibold text-[#1a1a2e]">{post.author_name}</span>
-          <span className="font-normal text-[#6b7280]">
-            &nbsp;·&nbsp;{formattedDate}&nbsp;·&nbsp;{post.read_time} min read
+        </span>
+        <span className="mt-3 flex items-center gap-2.5 text-[13px] text-[#0b1a33]/60">
+          {post.author_avatar_url && (
+            <img src={post.author_avatar_url} alt="" className="size-7 rounded-full object-cover" />
+          )}
+          <span className="truncate">
+            <span className="font-semibold text-[#0b1a33]">{post.author_name}</span> ·{' '}
+            {formatStoryDate(post)}
           </span>
-        </p>
-      </div>
+        </span>
+      </span>
     </Link>
   )
 }
 
-function BlogCardSkeleton() {
-  return (
-    <div className="flex animate-pulse flex-col overflow-hidden rounded-xl bg-white shadow-[0px_4px_20px_0px_rgba(26,26,46,0.08)]">
-      <div className="h-[231px] bg-[#e5e7eb]" />
-      <div className="flex flex-1 flex-col px-6 pt-5 pb-0">
-        <div className="h-5 w-3/4 rounded bg-[#e5e7eb]" />
-        <div className="mt-2 h-4 w-full rounded bg-[#e5e7eb]" />
-        <div className="mt-2 h-4 w-5/6 rounded bg-[#e5e7eb]" />
-        <div className="mt-2 h-4 w-2/3 rounded bg-[#e5e7eb]" />
-      </div>
-      <div className="border-surface mx-6 mt-auto flex items-center gap-3 border-t py-4">
-        <div className="size-8 rounded-full bg-[#e5e7eb]" />
-        <div className="h-4 w-40 rounded bg-[#e5e7eb]" />
-      </div>
-    </div>
-  )
-}
-
-/* ─── Page ─── */
-
 export function BlogPage() {
-  const [activeCategory, setActiveCategory] = useState<string>('All')
+  const [chapter, setChapter] = useState<string>('All')
   const [searchTerm, setSearchTerm] = useState('')
-
+  const [viewerAt, setViewerAt] = useState<number | null>(null)
   const { posts: allPosts, loading } = useBlogPosts()
+  const reduced = useReducedMotion()
+  const [listMode, setListMode] = useState(readListMode)
+  const [drawer, setDrawer] = useState(false)
+  const closeDrawer = useCallback(() => setDrawer(false), [])
 
-  const filteredPosts = useMemo(() => {
-    return allPosts.filter((post) => {
-      const matchesCategory = activeCategory === 'All' || post.category === activeCategory
-      const matchesSearch =
-        searchTerm.trim() === '' ||
-        post.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        post.excerpt.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        post.author_name.toLowerCase().includes(searchTerm.toLowerCase())
-      return matchesCategory && matchesSearch
-    })
-  }, [allPosts, activeCategory, searchTerm])
+  const latest = useMemo(() => sortStories(allPosts), [allPosts])
+  // stories are numbered in the order they were published
+  const numbers = useMemo(() => new Map(latest.map((p, i) => [p.id, latest.length - i])), [latest])
+  const countries = useMemo(() => groupByDestination(latest).length, [latest])
+
+  const filtered = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase()
+    return latest.filter(
+      (p) =>
+        (chapter === 'All' || p.category === chapter) &&
+        (!q ||
+          p.title.toLowerCase().includes(q) ||
+          p.excerpt.toLowerCase().includes(q) ||
+          p.author_name.toLowerCase().includes(q)),
+    )
+  }, [latest, chapter, searchTerm])
+
+  const changeMode = (list: boolean) => {
+    setListMode(list)
+    try {
+      localStorage.setItem(VIEW_KEY, list ? 'list' : 'house')
+    } catch {
+      /* remembered for this visit only */
+    }
+    window.scrollTo({ top: 0, behavior: 'instant' })
+  }
+  // reduced motion always gets the list: the house is all movement
+  const house = !reduced && !listMode
 
   return (
     <>
-      {/* ══ HERO ══ */}
-      <section
-        className="relative overflow-hidden py-[88px]"
-        style={{ background: 'linear-gradient(165deg, #037ef3 0%, #0250a0 100%)' }}
-      >
-        {/* Decorative circles */}
-        <div className="pointer-events-none absolute top-[-60px] right-[92px] size-[280px] rounded-[140px] bg-white/5" />
-        <div className="pointer-events-none absolute bottom-0 left-[-40px] size-[220px] translate-y-1/4 rounded-[110px] bg-white/4" />
-        {/* Decorative accent squares */}
-        <div className="pointer-events-none absolute top-[164px] left-[123px] size-3 rounded-[6px] bg-white/25" />
-        <div className="pointer-events-none absolute top-[82px] right-[192px] size-2 rounded-[4px] bg-white/20" />
-
-        <Stagger
-          inView={false}
-          className="relative mx-auto flex max-w-[720px] flex-col items-center gap-0 text-center"
-        >
-          <StaggerItem>
-            <div className="mb-[28px] inline-flex rounded-[24px] border border-white/22 bg-white/12 px-[18px] py-[7px]">
-              <span className="text-[12px] font-semibold tracking-[0.72px] text-white">
-                AIESEC IN COLOMBO SOUTH
-              </span>
-            </div>
-          </StaggerItem>
-
-          <StaggerItem>
-            <h1 className="text-[52px] leading-[1.18] font-extrabold tracking-[-0.52px] text-white">
-              Our Stories &amp; Insights
-            </h1>
-          </StaggerItem>
-
-          <StaggerItem>
-            <p className="mt-[20px] max-w-[560px] text-[18px] leading-[1.7] text-white/80">
-              Experiences, leadership journeys, and updates from AIESEC in Colombo South — stories
-              that inspire, connect, and move the world forward.
-            </p>
-          </StaggerItem>
-        </Stagger>
-      </section>
-
-      {/* ══ FILTER & SEARCH BAR ══ */}
-      <section className="sticky top-0 z-20 border-b border-[#f0f1f5] bg-white shadow-[0px_2px_6px_rgba(0,0,0,0.04)]">
-        <div className="mx-auto flex max-w-[1280px] flex-col gap-4 px-8 pt-5 pb-px">
-          {/* Category pills */}
-          <div className="flex flex-wrap gap-[10px]">
-            {CATEGORIES.map((cat) => {
-              const isActive = activeCategory === cat
-              return (
-                <button
-                  key={cat}
-                  onClick={() => setActiveCategory(cat)}
-                  className={[
-                    'rounded-[24px] border px-[21px] py-[9px] text-[13px] leading-normal font-semibold transition-all duration-200',
-                    isActive
-                      ? 'border-brand bg-brand text-white drop-shadow-[0px_4px_7px_rgba(3,126,243,0.3)]'
-                      : 'border-brand text-brand hover:bg-brand/5 bg-white',
-                  ].join(' ')}
-                >
-                  {cat}
-                </button>
-              )
-            })}
-          </div>
-
-          {/* Search */}
-          <div className="flex justify-center pb-[20px]">
-            <div className="relative w-[520px]">
-              <Search
-                size={17}
-                className="pointer-events-none absolute top-1/2 left-[16px] -translate-y-1/2 text-[#1a1a2e]/40"
-              />
-              <input
-                type="text"
-                placeholder="Search articles…"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="focus:border-brand focus:ring-brand/20 h-[45px] w-full rounded-[12px] border border-[#e5e7eb] bg-[#fafafa] pr-4 pl-[44px] text-[14px] text-[#1a1a2e] placeholder:text-[#1a1a2e]/50 focus:ring-2 focus:outline-none"
-              />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ══ ARTICLES GRID ══ */}
-      <section className="bg-surface px-8 pt-14 pb-20">
-        <div className="mx-auto max-w-[1280px]">
-          {/* Count */}
-          {!loading && (
-            <p className="mb-8 text-[14px] text-[#6b7280]">
-              Showing <span className="font-bold text-[#1a1a2e]">{filteredPosts.length}</span>{' '}
-              {filteredPosts.length === 1 ? 'article' : 'articles'}
-            </p>
-          )}
-
-          {loading ? (
-            <div className="grid grid-cols-1 gap-[23px] sm:grid-cols-2 lg:grid-cols-3">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <BlogCardSkeleton key={i} />
-              ))}
-            </div>
-          ) : filteredPosts.length > 0 ? (
-            <AnimatePresence mode="wait">
-              <Stagger
-                key={`${activeCategory}-${searchTerm}`}
-                className="grid grid-cols-1 gap-[23px] sm:grid-cols-2 lg:grid-cols-3"
-              >
-                {filteredPosts.map((post) => (
-                  <StaggerItem key={post.id}>
-                    <BlogCard post={post} />
-                  </StaggerItem>
-                ))}
-              </Stagger>
-            </AnimatePresence>
-          ) : (
-            <div className="flex flex-col items-center gap-4 py-24 text-center">
-              <div className="bg-brand/10 flex size-16 items-center justify-center rounded-full">
-                <Search size={28} className="text-brand" />
+      {/* ══ THE STORY HOUSE, OR THE SAME STORIES AS A LIST ══ */}
+      {house && !loading ? (
+        <ExhibitionHall
+          posts={latest}
+          numbers={numbers}
+          onList={() => changeMode(true)}
+          onWrite={() => setDrawer(true)}
+        />
+      ) : (
+        <section className="bg-[#f5f7fb] px-6 pt-32 pb-20 md:px-10 md:pt-36">
+          <div className="mx-auto max-w-[1200px]">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p className="text-[12px] font-bold tracking-[0.24em] text-[#037ef3] uppercase">
+                  AIESEC in Colombo South
+                </p>
+                <h1 className="font-display mt-2 text-[40px] leading-[1.02] font-bold tracking-[-0.02em] text-[#0b1a33] md:text-[56px]">
+                  The Story House
+                </h1>
+                {!reduced && (
+                  <button
+                    type="button"
+                    onClick={() => changeMode(false)}
+                    className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#037ef3] px-4 py-2 text-[13px] font-semibold text-white transition-transform hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#037ef3]"
+                  >
+                    <DoorOpen size={15} /> Step inside the house
+                  </button>
+                )}
               </div>
-              <p className="text-[18px] font-semibold text-[#1a1a2e]">No articles found</p>
-              <p className="max-w-xs text-[14px] text-[#6b7280]">
-                Try a different search term or select a different category.
-              </p>
-              <button
-                onClick={() => {
-                  setActiveCategory('All')
-                  setSearchTerm('')
-                }}
-                className="bg-brand hover:bg-brand-dark mt-2 rounded-lg px-6 py-2.5 text-[14px] font-semibold text-white transition-colors"
-              >
-                Clear filters
-              </button>
+              <label className="relative block w-full md:w-[300px]">
+                <span className="sr-only">Search stories</span>
+                <Search
+                  size={16}
+                  className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-[#0b1a33]/40"
+                />
+                <input
+                  type="search"
+                  placeholder="Search by title or name"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="h-11 w-full rounded-full border border-[#0b1a33]/10 bg-white pr-4 pl-10 text-[16px] text-[#0b1a33] placeholder:text-[#0b1a33]/40 focus:border-[#037ef3] focus:ring-2 focus:ring-[#037ef3]/20 focus:outline-none md:text-[14px]"
+                />
+              </label>
             </div>
-          )}
 
-          {/* Contributor Portal Footer Note */}
-          <div className="mt-16 border-t border-[#e5e7eb] pt-8 text-center">
-            <p className="text-[14px] text-[#6b7280]">
-              Are you an exchange participant or member?{' '}
-              <Link
-                to="/blog/submit"
-                className="text-brand font-semibold hover:underline inline-flex items-center gap-1"
-              >
-                Share your journey in our Contributor Portal &rarr;
-              </Link>
-            </p>
+            <div
+              className="-mx-1 mt-6 flex gap-2 overflow-x-auto px-1 pb-1"
+              role="tablist"
+              aria-label="Story topics"
+            >
+              {STORY_CHAPTERS.map((c) => {
+                const active = chapter === c
+                const color = c === 'All' ? '#037ef3' : categoryColor(c)
+                return (
+                  <button
+                    key={c}
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => setChapter(c)}
+                    className="flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-[13px] font-medium whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-[#037ef3]"
+                    style={
+                      active
+                        ? { background: color, borderColor: color, color: 'white' }
+                        : {
+                            borderColor: 'rgba(11,26,51,.12)',
+                            background: 'white',
+                            color: '#0b1a33',
+                          }
+                    }
+                  >
+                    {c !== 'All' && (
+                      <span
+                        className="size-2 rounded-full"
+                        style={{ background: active ? 'white' : color }}
+                      />
+                    )}
+                    {c === 'All' ? 'All stories' : c}
+                  </button>
+                )
+              })}
+            </div>
+
+            {loading ? (
+              <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="aspect-[4/5] animate-pulse rounded-[18px] bg-white" />
+                ))}
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="mx-auto max-w-[440px] py-20 text-center">
+                <p className="font-display text-[26px] font-semibold text-[#0b1a33]">
+                  No stories match that
+                </p>
+                <p className="mt-2 text-[15px] text-[#0b1a33]/65">
+                  Clear the search, or be the first to write about it.
+                </p>
+                <button
+                  onClick={() => {
+                    setChapter('All')
+                    setSearchTerm('')
+                  }}
+                  className="mt-6 rounded-full border border-[#0b1a33]/15 bg-white px-5 py-2.5 text-[14px] font-semibold text-[#0b1a33]"
+                >
+                  Show every story
+                </button>
+              </div>
+            ) : (
+              <motion.div layout className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                <AnimatePresence mode="popLayout">
+                  {filtered.map((post) => (
+                    <motion.div
+                      key={post.id}
+                      layout
+                      initial={reduced ? false : { opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.97 }}
+                      transition={{ duration: 0.35 }}
+                    >
+                      <StoryCard post={post} />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </motion.div>
+            )}
           </div>
+        </section>
+      )}
+
+      {/* ══ WHERE WE WENT ══ */}
+      <section className="relative overflow-hidden bg-[#0b1a33] px-6 py-20 text-white md:px-10 md:py-24">
+        <div className="pointer-events-none absolute -top-40 -right-40 size-[520px] rounded-full bg-[#037ef3]/25 blur-3xl" />
+        <div className="relative mx-auto grid max-w-[1200px] items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,480px)]">
+          <div className="max-w-[520px]">
+            <p className="text-[12px] font-bold tracking-[0.24em] text-[#7cc0ff] uppercase">
+              {loading ? 'Around the world' : `${countries} countries and counting`}
+            </p>
+            <h2 className="font-display mt-3 text-[38px] leading-[1.05] font-bold tracking-[-0.02em] md:text-[52px]">
+              Where our members went.
+            </h2>
+            <p className="mt-5 text-[16px] leading-[1.75] text-white/70">
+              Every pin is someone from Colombo South who packed a bag and went. Spin the globe and
+              tap a face to hear their story in under a minute.
+            </p>
+            <button
+              type="button"
+              onClick={() => setDrawer(true)}
+              className="mt-8 inline-flex items-center gap-2 rounded-full bg-[#ffc845] px-6 py-3.5 text-[15px] font-semibold text-[#0b1a33] transition-transform hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ffc845]"
+            >
+              <PenLine size={17} />
+              Write your story
+            </button>
+          </div>
+          <StoryGlobe
+            posts={latest}
+            onOpen={(post) => setViewerAt(latest.findIndex((p) => p.id === post.id))}
+          />
         </div>
       </section>
+
+      <WriteDrawer open={drawer} onClose={closeDrawer} />
+
+      <AnimatePresence>
+        {viewerAt !== null && latest.length > 0 && (
+          <StoryViewer posts={latest} startIndex={viewerAt} onClose={() => setViewerAt(null)} />
+        )}
+      </AnimatePresence>
     </>
   )
 }
