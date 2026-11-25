@@ -729,7 +729,7 @@ export function HouseFacade({
 
       <p
         ref={hintRef}
-        className="absolute bottom-28 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-white/95 px-5 py-2.5 text-[14px] font-semibold whitespace-nowrap text-[#0b1a33] shadow-[0_10px_30px_-10px_rgba(0,0,0,.5)]"
+        className="absolute bottom-28 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-white/95 px-5 py-2.5 text-[14px] font-semibold whitespace-nowrap text-[#0b1a33] shadow-[0_10px_30px_-10px_rgba(0,0,0,.5)] max-md:bottom-40"
       >
         <span className="size-2 animate-pulse rounded-full bg-[#037ef3]" />
         Scroll, or tap the door, to step inside

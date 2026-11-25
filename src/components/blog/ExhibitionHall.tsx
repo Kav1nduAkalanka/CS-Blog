@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useNavigationType } from 'react-router-dom'
 import { animate, useMotionValue, useMotionValueEvent, useScroll, useSpring } from 'motion/react'
-import { List, MoveHorizontal, Plus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, List, MoveHorizontal, Plus } from 'lucide-react'
 import type { BlogPost } from '../../lib/database.types'
 import { STORY_CHAPTERS, categoryColor, formatStoryDate } from './storyUtils'
 import { flyIntoStory, saveHallReturn, takeHallReturn, type HallReturn } from './hallFly'
@@ -18,12 +18,28 @@ import { HouseFacade } from './HouseFacade'
    wall curves away in front of you and the frames shrink into the distance.
    Positions along the wall are arc lengths (s) in px. */
 
-// CSS perspective, i.e. the camera's focal length: a wider lens on narrow phone screens
-const focal = () => Math.round(Math.min(760, Math.max(430, window.innerWidth * 1.1)))
+// CSS perspective, i.e. the camera's focal length: a wider lens on narrow phone screens,
+// and wider still on short ones, so the print fits between the menu and the card
+const focal = (lite = false) => {
+  const p = Math.min(760, Math.max(430, window.innerWidth * 1.1))
+  return Math.round(lite ? Math.max(260, Math.min(p, (window.innerHeight - 290) * 1.2)) : p)
+}
+/** Phones: eye level that centres the print between the menu (top) and the card (bottom). */
+const eyeShift = (lite: boolean) => (lite ? Math.round(0.18 * focal(true) - 60) : 0)
 const RW = 2600 // radius of the wall
-const RC = 1800 // radius the camera walks along
-const LOOK = 860 // arc length between the camera and the frame it looks at
-const YAW = (38 * Math.PI) / 180 // how far right of "straight ahead" the camera looks
+
+/** Where the camera walks and where it looks. */
+interface Geo {
+  rc: number // radius the camera walks along
+  yaw: number // how far right of "straight ahead" the camera looks
+  look: number // arc length between the camera and the frame it looks at
+  back: number // how far back the camera starts, so the corridor comes toward you
+}
+// wide screens: down the middle of the corridor, looking well ahead along the curve
+const WIDE: Geo = { rc: 1800, yaw: (38 * Math.PI) / 180, look: 860, back: 460 }
+// phones: close to the wall and turned toward it, so one framed print fills the screen
+const NARROW: Geo = { rc: 2150, yaw: (58 * Math.PI) / 180, look: 264, back: 700 }
+
 const SPACING = 600 // between two frames
 const GROUP_GAP = 900 // extra space before the next room, for its title wall
 const SEG = 260 // width of one wall panel
@@ -31,10 +47,9 @@ const FLOOR_Y = 520 // floor, measured down from eye level
 const WALL_TOP = -760 // ceiling
 const FOG_START = 2200
 const FOG_END = 4800
-const FLOOR_IN = RC + 160 // floor and ceiling are drawn from the wall to just past the camera
+const FLOOR_IN = WIDE.rc + 160 // floor and ceiling are drawn from the wall to past the camera
 const SCROLL_PER_PX = 0.75 // page scroll per px walked
 const ENTRY_PX = 1400 // page scroll spent walking up to the house and through the door
-const ENTRY_BACK = 460 // how far back the camera starts, so the corridor comes toward you
 
 const FRAME_W = 520
 const FRAME_H = 860
@@ -63,7 +78,7 @@ type Piece =
   | { kind: 'wall'; key: string; s: number; mirror?: boolean }
   | { kind: 'planks'; key: string; s: number }
   | { kind: 'ceiling'; key: string; s: number }
-  | { kind: 'intro'; key: string; s: number }
+  | { kind: 'intro'; key: string; s: number; w: number; h: number }
   | { kind: 'floor'; key: string; s: number; text: string; color: string }
   | { kind: 'lamp'; key: string; s: number; mirror?: boolean }
   | { kind: 'beam'; key: string; s: number }
@@ -74,6 +89,7 @@ type Piece =
       kind: 'title'
       key: string
       s: number
+      w: number
       text: string
       color: string
       index: number
@@ -81,6 +97,14 @@ type Piece =
     }
 
 type FramePieceData = Extract<Piece, { kind: 'frame' }>
+type TitlePieceData = Extract<Piece, { kind: 'title' }>
+
+/** A place the phone camera comes to rest: the welcome wall, a room's title, a story, the empty frame. */
+type Point =
+  | { kind: 'intro'; s: number }
+  | { kind: 'title'; s: number; title: TitlePieceData }
+  | { kind: 'frame'; s: number; frame: FramePieceData; index: number }
+  | { kind: 'empty'; s: number }
 
 interface Stop {
   name: string
@@ -102,7 +126,7 @@ const lit = (key: string, s: number, color: string, lite: boolean): Piece[] =>
         { kind: 'pool', key: `pool-${key}`, s, color },
       ]
 
-function layoutHall(posts: BlogPost[], numbers: Map<string, number>, lite = false) {
+function layoutHall(posts: BlogPost[], numbers: Map<string, number>, lite: boolean, LOOK: number) {
   const known = new Set(TOPICS)
   const groups = [...TOPICS, OTHER]
     .map((name) => ({
@@ -112,7 +136,7 @@ function layoutHall(posts: BlogPost[], numbers: Map<string, number>, lite = fals
     .filter((g) => g.posts.length > 0)
 
   const pieces: Piece[] = [
-    { kind: 'intro', key: 'intro', s: LOOK },
+    { kind: 'intro', key: 'intro', s: LOOK, w: lite ? 440 : 1200, h: lite ? 520 : 380 },
     ...lit('intro', LOOK, BLUE, lite),
   ]
   const stops: Stop[] = []
@@ -125,6 +149,7 @@ function layoutHall(posts: BlogPost[], numbers: Map<string, number>, lite = fals
         kind: 'title',
         key: `title-${g.name}`,
         s: s - 600,
+        w: lite ? 440 : 600,
         text: g.name,
         color,
         index: stops.length + 1,
@@ -178,9 +203,8 @@ const radiusOf = (p: Piece) => {
     case 'pool':
       return RW - 210
     case 'intro':
-      return RW - bulge(1200)
     case 'title':
-      return RW - bulge(600)
+      return RW - bulge(p.w)
     case 'lamp':
       return RW - 70
     case 'beam':
@@ -204,9 +228,9 @@ const sizeOf = (p: Piece): [number, number, number] => {
     case 'pool':
       return [620, 420, FLOOR_Y - 2]
     case 'intro':
-      return [1200, 380, -120]
+      return [p.w, p.h, -120]
     case 'title':
-      return [600, 560, -40]
+      return [p.w, 560, -40]
     case 'lamp':
       return [72, 96, LAMP_Y]
     case 'beam':
@@ -247,6 +271,22 @@ function peekReturn(): HallReturn | null {
   }
 }
 
+/** Index of the resting point closest to walk position s. */
+function nearestPoint(points: Point[], s: number) {
+  let best = 0
+  points.forEach((p, i) => {
+    if (Math.abs(p.s - s) < Math.abs(points[best].s - s)) best = i
+  })
+  return best
+}
+
+/** The page-scroll range the hall's walk spans. */
+function scrollRange(el: HTMLElement | null) {
+  if (!el) return { top: 0, span: 1 }
+  const top = el.getBoundingClientRect().top + window.scrollY
+  return { top, span: Math.max(1, el.offsetHeight - window.innerHeight) }
+}
+
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 const mix = (a: Cam, b: Cam, t: number): Cam => ({
   s: lerp(a.s, b.s, t),
@@ -255,10 +295,10 @@ const mix = (a: Cam, b: Cam, t: number): Cam => ({
   fade: lerp(a.fade, b.fade, t),
 })
 /** Standing right in front of a frame, facing it, close enough to fill the view. */
-const facing = (s: number): Cam => ({
+const facing = (s: number, lite: boolean): Cam => ({
   s,
   yaw: Math.PI / 2,
-  r: RW - Math.max(380, (focal() * PHOTO_H) / (window.innerHeight * 0.68)),
+  r: RW - Math.max(380, (focal(lite) * PHOTO_H) / (window.innerHeight * 0.68)),
   fade: 1,
 })
 
@@ -325,11 +365,13 @@ function FramePiece({
   post,
   number,
   focused,
+  label,
   onOpen,
 }: {
   post: BlogPost
   number: number
   focused: boolean
+  label: boolean
   onOpen: (e: React.MouseEvent) => void
 }) {
   const color = categoryColor(post.category)
@@ -349,10 +391,10 @@ function FramePiece({
         >
           <Polaroid post={post} number={number} />
         </span>
-        {/* the wall label: lifts when you point at the photo */}
+        {/* the wall label: lifts when you point at the photo (phones read it in the card below) */}
         <span
           data-fade
-          className="mt-10 block w-[300px] border-l-2 py-1 pl-4 text-left transition-[transform,opacity] duration-300 group-hover:-translate-y-2"
+          className={`mt-10 w-[300px] border-l-2 py-1 pl-4 text-left transition-[transform,opacity] duration-300 group-hover:-translate-y-2 ${label ? 'block' : 'hidden'}`}
           style={{ borderColor: color }}
         >
           <span
@@ -454,14 +496,27 @@ function Hall({
   const navigate = useNavigate()
   const navType = useNavigationType()
   const location = useLocation()
+  const G = lite ? NARROW : WIDE
+  const LOOK = G.look
   const { pieces, stops, sMax } = useMemo(
-    () => layoutHall(posts, numbers, lite),
-    [posts, numbers, lite],
+    () => layoutHall(posts, numbers, lite, LOOK),
+    [posts, numbers, lite, LOOK],
   )
   const frames = useMemo(
     () => pieces.filter((p): p is FramePieceData => p.kind === 'frame' && !p.mirror),
     [pieces],
   )
+  // where the phone camera comes to rest, in walking order
+  const points = useMemo(() => {
+    const list: Point[] = [{ kind: 'intro', s: 0 }]
+    for (const p of pieces) {
+      if (p.kind === 'title') list.push({ kind: 'title', s: p.s - LOOK, title: p })
+      if (p.kind === 'frame' && !p.mirror)
+        list.push({ kind: 'frame', s: p.s - LOOK, frame: p, index: frames.indexOf(p) })
+    }
+    list.push({ kind: 'empty', s: sMax })
+    return list.sort((a, b) => a.s - b.s)
+  }, [pieces, frames, sMax, LOOK])
 
   const sectionRef = useRef<HTMLElement>(null)
   const worldRef = useRef<HTMLDivElement>(null)
@@ -469,14 +524,18 @@ function Hall({
   const whiteRef = useRef<HTMLDivElement>(null)
   const barRef = useRef<HTMLDivElement>(null)
   const uiRef = useRef<HTMLDivElement>(null)
+  const topRef = useRef<HTMLDivElement>(null)
+  const chipsRef = useRef<HTMLDivElement>(null)
   const nodes = useRef<(HTMLDivElement | null)[]>([])
   const shown = useRef<(boolean | undefined)[]>([])
-  const cam = useRef<Cam>({ s: 0, yaw: YAW, r: RC, fade: 0 })
+  const cam = useRef<Cam>({ s: 0, yaw: G.yaw, r: G.rc, fade: 0 })
   const mode = useRef<'walk' | 'fly' | 'return'>('walk')
   const target = useRef<string | null>(null)
   const activeRef = useRef(-1)
+  const atRef = useRef(0)
   const parked = useRef(false)
   const [active, setActive] = useState(0)
+  const [at, setAt] = useState(0)
   const [started, setStarted] = useState(false)
   const [focusId, setFocusId] = useState<string | null>(null)
 
@@ -484,8 +543,9 @@ function Hall({
     const world = worldRef.current
     if (!world) return
     const { s, yaw, r: R, fade } = cam.current
-    const P = focal()
+    const P = focal(lite)
     if (stageRef.current) stageRef.current.style.perspective = `${P}px`
+    world.style.top = `calc(50% + ${eyeShift(lite)}px)`
     const phc = s / RW
     world.style.transform = `translateZ(${P}px) rotateY(${yaw}rad) translateX(${-R}px) rotateY(${-phc}rad)`
     if (whiteRef.current) whiteRef.current.style.opacity = String(fade)
@@ -527,7 +587,12 @@ function Hall({
       activeRef.current = a
       setActive(a)
     }
-  }, [pieces, stops, sMax])
+    const n = nearestPoint(points, s)
+    if (n !== atRef.current) {
+      atRef.current = n
+      setAt(n)
+    }
+  }, [pieces, stops, sMax, points, LOOK, lite])
 
   // walking: page scroll, smoothed, moves the camera
   const { scrollYProgress } = useScroll({ target: sectionRef, offset: ['start start', 'end end'] })
@@ -556,9 +621,9 @@ function Hall({
     (v: number): Cam => {
       const e = Math.min(1, v / entryShare)
       const s = v <= entryShare ? 0 : ((v - entryShare) / (1 - entryShare)) * sMax
-      return { s, yaw: YAW, r: RC - ENTRY_BACK * (1 - e) ** 2, fade: 0 }
+      return { s, yaw: G.yaw, r: G.rc - G.back * (1 - e) ** 2, fade: 0 }
     },
-    [entryShare, sMax],
+    [entryShare, sMax, G],
   )
   const showUi = useCallback(
     (v: number) => {
@@ -567,8 +632,14 @@ function Hall({
       const k = Math.min(1, Math.max(0, (v / entryShare - 0.9) / 0.1))
       ui.style.opacity = String(k)
       ui.style.visibility = k > 0 ? 'visible' : 'hidden'
+      // on a phone the list button moves into the card once you are inside
+      const top = topRef.current
+      if (top && lite) {
+        top.style.opacity = String(1 - k)
+        top.style.visibility = k < 1 ? 'visible' : 'hidden'
+      }
     },
-    [entryShare],
+    [entryShare, lite],
   )
   const hideWorld = useCallback((v: number) => v / entryShare < 0.62, [entryShare])
   useMotionValueEvent(smooth, 'change', (v) => {
@@ -610,17 +681,72 @@ function Hall({
     }
   }, [render, smooth, camAt, entry, entryShare, showUi, hideWorld])
 
-  const scrollRange = () => {
-    const el = sectionRef.current
-    if (!el) return { top: 0, span: 1 }
-    const top = el.getBoundingClientRect().top + window.scrollY
-    return { top, span: Math.max(1, el.offsetHeight - window.innerHeight) }
-  }
   /** Page scroll position that puts the camera at walk position s. */
-  const scrollFor = (s: number) => {
-    const { top, span } = scrollRange()
-    return top + (entryShare + (Math.min(Math.max(s, 0), sMax) / sMax) * (1 - entryShare)) * span
-  }
+  const scrollFor = useCallback(
+    (s: number) => {
+      const { top, span } = scrollRange(sectionRef.current)
+      return top + (entryShare + (Math.min(Math.max(s, 0), sMax) / sMax) * (1 - entryShare)) * span
+    },
+    [entryShare, sMax],
+  )
+  /** Walk to resting point i (phones). */
+  const goTo = useCallback(
+    (i: number) => {
+      const p = points[Math.min(points.length - 1, Math.max(0, i))]
+      window.scrollTo({ top: scrollFor(p.s), behavior: 'smooth' })
+    },
+    [points, scrollFor],
+  )
+
+  // phones: when a swipe or scroll comes to rest, settle on the nearest story,
+  // so there is always one print in front of you and never half of two
+  useEffect(() => {
+    if (!lite) return
+    let timer = 0
+    let touching = false
+    const settle = () => {
+      window.clearTimeout(timer)
+      timer = window.setTimeout(() => {
+        if (touching || mode.current !== 'walk') return
+        const { top, span } = scrollRange(sectionRef.current)
+        const v = (window.scrollY - top) / span
+        // halfway through the door finishes walking in; past the hall is left alone
+        if (v < entryShare * 0.75 || v > 1) return
+        const y = scrollFor(points[nearestPoint(points, camAt(v).s)].s)
+        if (Math.abs(y - window.scrollY) > 3) window.scrollTo({ top: y, behavior: 'smooth' })
+      }, 160)
+    }
+    const down = () => {
+      touching = true
+      window.clearTimeout(timer)
+    }
+    const up = () => {
+      touching = false
+      settle()
+    }
+    window.addEventListener('scroll', settle, { passive: true })
+    window.addEventListener('touchstart', down, { passive: true })
+    window.addEventListener('touchend', up)
+    window.addEventListener('touchcancel', up)
+    return () => {
+      window.clearTimeout(timer)
+      window.removeEventListener('scroll', settle)
+      window.removeEventListener('touchstart', down)
+      window.removeEventListener('touchend', up)
+      window.removeEventListener('touchcancel', up)
+    }
+  }, [lite, points, entryShare, camAt, scrollFor])
+
+  // keep the current room's chip in view in the phone card
+  useEffect(() => {
+    const row = chipsRef.current
+    const chip = row?.querySelector<HTMLElement>(`[data-room="${active}"]`)
+    if (!row || !chip) return
+    row.scrollTo({
+      left: chip.offsetLeft - row.clientWidth / 2 + chip.offsetWidth / 2,
+      behavior: 'smooth',
+    })
+  }, [active])
 
   // coming back from a story: pull the camera back out of the photo it entered
   useEffect(() => {
@@ -632,7 +758,7 @@ function Hall({
     let stop: { stop: () => void } | undefined
     const raf = requestAnimationFrame(() => {
       window.scrollTo({ top: y, behavior: 'instant' })
-      const { top, span } = scrollRange()
+      const { top, span } = scrollRange(sectionRef.current)
       const v = Math.min(Math.max((y - top) / span, 0), 1)
       const walkTo = camAt(v)
       smooth.jump(v)
@@ -641,7 +767,7 @@ function Hall({
       mode.current = 'return'
       setStarted(true)
       target.current = frame.key
-      const from = facing(frame.s)
+      const from = facing(frame.s, lite)
       stop = animate(0, 1, {
         duration: 1.3,
         ease: [0.33, 0, 0.2, 1],
@@ -665,8 +791,8 @@ function Hall({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // dragging sideways walks too
-  const drag = useRef({ x: 0, moved: 0, down: false })
+  // dragging sideways walks too; on a phone one swipe steps exactly one story
+  const drag = useRef({ x: 0, x0: 0, from: 0, moved: 0, down: false })
   useEffect(() => {
     const move = (e: PointerEvent) => {
       const d = drag.current
@@ -674,18 +800,28 @@ function Hall({
       const dx = e.clientX - d.x
       d.x = e.clientX
       d.moved += Math.abs(dx)
-      if (d.moved > 6) window.scrollBy({ top: -dx * 2.4, behavior: 'instant' })
+      if (d.moved > 6) window.scrollBy({ top: -dx * (lite ? 1.2 : 2.4), behavior: 'instant' })
     }
     const up = () => {
+      const d = drag.current
+      if (!d.down) return
+      d.down = false
+      const swipe = d.x - d.x0
+      if (lite && mode.current === 'walk' && Math.abs(swipe) > 36)
+        goTo(d.from + (swipe < 0 ? 1 : -1))
+    }
+    const cancel = () => {
       drag.current.down = false
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', cancel)
     return () => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', cancel)
     }
-  }, [])
+  }, [lite, goTo])
 
   const open = (frame: FramePieceData, el: HTMLElement | null) => {
     if (mode.current !== 'walk') return
@@ -694,7 +830,7 @@ function Hall({
     el?.querySelectorAll<HTMLElement>('[data-fade]').forEach((n) => (n.style.opacity = '0'))
     saveHallReturn({ y: window.scrollY, id: frame.post.id })
     const from = { ...cam.current }
-    const to = facing(frame.s)
+    const to = facing(frame.s, lite)
     animate(0, 1, {
       duration: 1.15,
       ease: [0.65, 0, 0.35, 1],
@@ -714,20 +850,25 @@ function Hall({
     })
   }
 
+  const point = points[at] ?? points[0]
+  const openFrame = (f: FramePieceData) => open(f, nodes.current[pieces.indexOf(f)])
+
   return (
     <section
       ref={sectionRef}
-      className="relative"
-      style={{ height: `calc(100svh + ${Math.round(ENTRY_PX + sMax * SCROLL_PER_PX)}px)` }}
+      // dark behind the stage, so a phone's browser bar sliding away never shows a blank strip
+      className="relative bg-[#05090f]"
+      style={{ height: `calc(100lvh + ${Math.round(ENTRY_PX + sMax * SCROLL_PER_PX)}px)` }}
       aria-labelledby="hall-title"
     >
       <div
-        className="sticky top-0 h-svh min-h-[620px] cursor-grab touch-pan-y overflow-hidden select-none active:cursor-grabbing"
-        style={{ perspective: `${focal()}px` }}
+        // dvh: the stage follows the visible screen as Safari's toolbar shows and hides
+        className="sticky top-0 h-dvh cursor-grab touch-pan-y overflow-hidden select-none active:cursor-grabbing md:min-h-[620px]"
+        style={{ perspective: `${focal(lite)}px` }}
         ref={stageRef}
         onPointerDown={(e) => {
           if (e.button !== 0) return
-          drag.current = { x: e.clientX, moved: 0, down: true }
+          drag.current = { x: e.clientX, x0: e.clientX, from: atRef.current, moved: 0, down: true }
         }}
         onClickCapture={(e) => {
           // a drag that ends on a photo is not a click
@@ -741,7 +882,12 @@ function Hall({
         <div className="absolute inset-0 bg-[linear-gradient(#03070f_0%,#081226_42%,#122442_49.6%,#0c1424_50.4%,#05090f_100%)]" />
         <div ref={whiteRef} className="absolute inset-0 bg-[#060d1b] opacity-0" />
 
-        <div ref={worldRef} className="absolute top-1/2 left-1/2 size-0 transform-3d">
+        <div
+          ref={worldRef}
+          className="absolute left-1/2 size-0 transform-3d"
+          // phones: eye level shifted so the print sits between the menu and the card
+          style={{ top: `calc(50% + ${eyeShift(lite)}px)` }}
+        >
           {pieces.map((p, i) => {
             const [w, h] = sizeOf(p)
             const mirror = isMirror(p)
@@ -787,11 +933,17 @@ function Hall({
                   />
                 )}
                 {p.kind === 'intro' && (
-                  <div className="flex size-full flex-col items-center justify-center text-center text-[#f4efe6]">
-                    <span className="text-[15px] font-bold tracking-[0.34em] text-[#e6c98f] uppercase">
+                  <div className="flex size-full flex-col items-center justify-center px-6 text-center text-[#f4efe6]">
+                    <span
+                      className="font-bold tracking-[0.34em] text-[#e6c98f] uppercase"
+                      style={{ fontSize: lite ? 13 : 15 }}
+                    >
                       The Story House · AIESEC in Colombo South
                     </span>
-                    <span className="font-hand mt-4 text-[96px] leading-[0.95]">
+                    <span
+                      className="font-hand mt-4 leading-[0.95]"
+                      style={{ fontSize: lite ? 64 : 96 }}
+                    >
                       Pages written by the people who went.
                     </span>
                   </div>
@@ -815,7 +967,10 @@ function Hall({
                   </div>
                 )}
                 {p.kind === 'title' && (
-                  <div className="flex size-full flex-col items-start justify-center px-10 text-left text-[#f4efe6]">
+                  <div
+                    className="flex size-full flex-col items-start justify-center text-left text-[#f4efe6]"
+                    style={{ paddingInline: lite ? 28 : 40 }}
+                  >
                     <span className="text-[15px] font-semibold tracking-[0.42em] text-[#e6c98f] uppercase">
                       Room {String(p.index).padStart(2, '0')}
                     </span>
@@ -823,7 +978,10 @@ function Hall({
                       className="mt-6 block h-[2px] w-16"
                       style={{ background: p.color, boxShadow: `0 0 18px ${p.color}` }}
                     />
-                    <span className="font-museum mt-6 text-[66px] leading-[1.02] font-medium text-balance">
+                    <span
+                      className="font-museum mt-6 leading-[1.02] font-medium text-balance"
+                      style={{ fontSize: lite ? 54 : 66 }}
+                    >
                       {p.text}
                     </span>
                     <span className="mt-6 text-[17px] tracking-[0.08em] text-white/50">
@@ -839,6 +997,7 @@ function Hall({
                       post={p.post}
                       number={p.number}
                       focused={focusId === p.post.id}
+                      label={!lite}
                       onOpen={(e) => {
                         if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
                         e.preventDefault()
@@ -869,8 +1028,12 @@ function Hall({
         />
 
         {/* what is on screen, around the room */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 px-4 pt-24 md:gap-6 md:px-10 md:pt-28">
-          <div className="rounded-[14px] bg-[#0b1a33]/80 px-4 py-2.5 shadow-[0_14px_30px_-16px_rgba(0,0,0,.8)] ring-1 ring-white/10 backdrop-blur-md">
+        <div
+          ref={topRef}
+          className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 px-4 pt-24 transition-opacity duration-300 md:gap-6 md:px-10 md:pt-28"
+        >
+          {/* phones: the house's own sign names it, so the card is for screen readers only */}
+          <div className="rounded-[14px] bg-[#0b1a33]/80 px-4 py-2.5 shadow-[0_14px_30px_-16px_rgba(0,0,0,.8)] ring-1 ring-white/10 backdrop-blur-md max-md:sr-only">
             <p className="text-[10px] font-bold tracking-[0.24em] text-[#7cc0ff] uppercase md:text-[11px] md:tracking-[0.28em]">
               AIESEC in Colombo South
             </p>
@@ -884,7 +1047,7 @@ function Hall({
           <button
             type="button"
             onClick={onList}
-            className="pointer-events-auto flex items-center gap-2 rounded-full border border-white/10 bg-[#0b1a33]/80 px-4 py-2.5 text-[13px] font-semibold text-white shadow-[0_8px_20px_-12px_rgba(0,0,0,.8)] backdrop-blur transition-colors hover:bg-[#0b1a33] focus-visible:outline-2 focus-visible:outline-[#037ef3]"
+            className="pointer-events-auto ml-auto flex items-center gap-2 rounded-full border border-white/10 bg-[#0b1a33]/80 px-4 py-2.5 text-[13px] font-semibold text-white shadow-[0_8px_20px_-12px_rgba(0,0,0,.8)] backdrop-blur transition-colors hover:bg-[#0b1a33] focus-visible:outline-2 focus-visible:outline-[#037ef3]"
           >
             <List size={15} /> <span className="max-md:hidden">Show as list</span>
             <span className="md:hidden">List</span>
@@ -893,11 +1056,13 @@ function Hall({
 
         {/* only once you are inside: how to walk, and the rooms */}
         <div ref={uiRef} className="invisible opacity-0 transition-opacity duration-300">
-          <p
-            className={`pointer-events-none absolute bottom-28 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-[#037ef3] px-4 py-2 text-[13px] font-semibold text-white shadow-[0_0_24px_rgba(3,126,243,.55)] transition-opacity duration-500 ${started ? 'opacity-0' : 'opacity-100'}`}
-          >
-            <MoveHorizontal size={15} /> Scroll or swipe to walk through
-          </p>
+          {!lite && (
+            <p
+              className={`pointer-events-none absolute bottom-28 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-[#037ef3] px-4 py-2 text-[13px] font-semibold text-white shadow-[0_0_24px_rgba(3,126,243,.55)] transition-opacity duration-500 ${started ? 'opacity-0' : 'opacity-100'}`}
+            >
+              <MoveHorizontal size={15} /> Scroll or swipe to walk through
+            </p>
+          )}
 
           {/* the same hall as plain links, for keyboards and screen readers;
             focusing one walks the camera to it */}
@@ -923,44 +1088,197 @@ function Hall({
             </li>
           </ul>
 
-          <nav
-            className="absolute inset-x-0 bottom-0 flex justify-center px-3 pb-4 md:px-10 md:pb-6"
-            aria-label="Rooms of the house"
-          >
-            <div className="max-w-full rounded-[22px] bg-[#0b1a33]/85 p-2 shadow-[0_18px_40px_-18px_rgba(11,26,51,.8)] ring-1 ring-white/10 backdrop-blur-md">
-              <div className="flex [scrollbar-width:none] items-center gap-1 overflow-x-auto whitespace-nowrap">
-                {stops.map((st, i) => (
-                  <button
-                    key={st.name}
-                    type="button"
-                    onClick={() =>
-                      window.scrollTo({ top: scrollFor(st.s - LOOK), behavior: 'smooth' })
-                    }
-                    className="flex shrink-0 items-center gap-2 rounded-full px-3.5 py-2 text-[13px] font-semibold transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-[#ffc845]"
-                    style={
-                      i === active
-                        ? {
-                            background: '#037ef3',
-                            color: '#ffffff',
-                            boxShadow: '0 0 20px rgba(3,126,243,.55)',
-                          }
-                        : { background: 'transparent', color: 'rgba(255,255,255,.85)' }
-                    }
-                    aria-current={i === active ? 'true' : undefined}
-                  >
-                    <span className="size-2 rounded-full" style={{ background: st.color }} />
-                    {st.name}
-                  </button>
-                ))}
+          {lite ? (
+            // phones: one card that reads the story in front of you, with the rooms above it
+            <div className="absolute right-[76px] bottom-3 left-3 rounded-[20px] bg-[#0b1a33]/90 px-2.5 pt-2.5 pb-2 text-white shadow-[0_20px_50px_-20px_rgba(0,0,0,.9)] ring-1 ring-white/10 backdrop-blur-md">
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={onList}
+                  aria-label="Show as list"
+                  className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/85 focus-visible:outline-2 focus-visible:outline-[#ffc845]"
+                >
+                  <List size={15} />
+                </button>
+                <nav
+                  ref={chipsRef}
+                  aria-label="Rooms of the house"
+                  className="flex min-w-0 flex-1 [scrollbar-width:none] gap-1 overflow-x-auto whitespace-nowrap"
+                >
+                  {stops.map((st, i) => (
+                    <button
+                      key={st.name}
+                      data-room={i}
+                      type="button"
+                      onClick={() =>
+                        goTo(
+                          points.findIndex((p) => p.kind === 'title' && p.title.text === st.name),
+                        )
+                      }
+                      className="flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[12px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-[#ffc845]"
+                      style={
+                        i === active
+                          ? { background: '#037ef3', color: '#ffffff' }
+                          : { background: 'transparent', color: 'rgba(255,255,255,.7)' }
+                      }
+                      aria-current={i === active ? 'true' : undefined}
+                    >
+                      <span className="size-1.5 rounded-full" style={{ background: st.color }} />
+                      {st.name}
+                    </button>
+                  ))}
+                </nav>
               </div>
-              <div className="mx-3 mt-2 mb-1 h-[3px] overflow-hidden rounded-full bg-white/15">
+
+              <div className="mt-2 flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => goTo(at - 1)}
+                  disabled={at === 0}
+                  aria-label="Previous"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-full text-white/80 transition-opacity focus-visible:outline-2 focus-visible:outline-[#ffc845] disabled:opacity-25"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+                <div
+                  className="flex min-h-[86px] min-w-0 flex-1 flex-col justify-center py-0.5"
+                  aria-live="polite"
+                >
+                  {point.kind === 'intro' && (
+                    <>
+                      <span className="text-[10px] font-bold tracking-[0.2em] text-[#e6c98f] uppercase">
+                        Welcome in
+                      </span>
+                      <span className="font-museum mt-0.5 text-[16px] leading-[1.2] text-[#f4efe6]">
+                        {frames.length} stories in {stops.length} rooms
+                      </span>
+                      <span className="mt-1 text-[12px] text-white/55">
+                        Swipe or scroll to walk through
+                      </span>
+                    </>
+                  )}
+                  {point.kind === 'title' && (
+                    <>
+                      <span className="text-[10px] font-bold tracking-[0.2em] text-[#e6c98f] uppercase">
+                        Room {String(point.title.index).padStart(2, '0')} of{' '}
+                        {String(stops.length).padStart(2, '0')}
+                      </span>
+                      <span className="font-museum mt-0.5 text-[18px] leading-[1.15] text-[#f4efe6]">
+                        {point.title.text}
+                      </span>
+                      <span className="mt-1 text-[12px] text-white/55">
+                        {point.title.count} {point.title.count === 1 ? 'story' : 'stories'} in this
+                        room
+                      </span>
+                    </>
+                  )}
+                  {point.kind === 'frame' && (
+                    <button
+                      type="button"
+                      onClick={() => openFrame(point.frame)}
+                      className="block min-w-0 text-left focus-visible:outline-2 focus-visible:outline-[#ffc845]"
+                    >
+                      <span
+                        className="flex items-center gap-1.5 text-[10px] font-bold tracking-[0.16em] uppercase"
+                        style={{ color: categoryColor(point.frame.post.category) }}
+                      >
+                        <span
+                          className="size-1.5 rounded-full"
+                          style={{ background: categoryColor(point.frame.post.category) }}
+                        />
+                        <span className="truncate">{point.frame.post.category}</span>
+                        <span className="ml-auto shrink-0 text-white/40">
+                          {point.index + 1} / {frames.length}
+                        </span>
+                      </span>
+                      <span className="font-museum mt-0.5 line-clamp-2 block text-[15px] leading-[1.22] text-[#f4efe6]">
+                        {point.frame.post.title}
+                      </span>
+                      <span className="mt-1 flex items-center gap-2 text-[12px] text-white/55">
+                        <span className="min-w-0 truncate">
+                          {point.frame.post.author_name} · {point.frame.post.read_time} min
+                        </span>
+                        <span className="ml-auto flex shrink-0 items-center gap-0.5 rounded-full bg-[#037ef3] px-2.5 py-1 text-[11px] font-semibold text-white">
+                          Read <ChevronRight size={12} />
+                        </span>
+                      </span>
+                    </button>
+                  )}
+                  {point.kind === 'empty' && (
+                    <>
+                      <span className="text-[10px] font-bold tracking-[0.2em] text-[#e6c98f] uppercase">
+                        Your page
+                      </span>
+                      <span className="font-museum mt-0.5 text-[16px] leading-[1.2] text-[#f4efe6]">
+                        This frame is saved for your story.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={onWrite}
+                        className="mt-1.5 self-start rounded-full bg-[#ffc845] px-3 py-1 text-[12px] font-semibold text-[#0b1a33]"
+                      >
+                        Write yours
+                      </button>
+                    </>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => goTo(at + 1)}
+                  disabled={at === points.length - 1}
+                  aria-label="Next"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-full text-white/80 transition-opacity focus-visible:outline-2 focus-visible:outline-[#ffc845] disabled:opacity-25"
+                >
+                  <ChevronRight size={20} />
+                </button>
+              </div>
+              <div className="mx-2 mt-1.5 h-[3px] overflow-hidden rounded-full bg-white/15">
                 <div
                   ref={barRef}
                   className="h-full origin-left scale-x-0 rounded-full bg-[#ffc845]"
                 />
               </div>
             </div>
-          </nav>
+          ) : (
+            <nav
+              className="absolute inset-x-0 bottom-0 flex justify-center px-3 pb-4 md:px-10 md:pb-6"
+              aria-label="Rooms of the house"
+            >
+              <div className="max-w-full rounded-[22px] bg-[#0b1a33]/85 p-2 shadow-[0_18px_40px_-18px_rgba(11,26,51,.8)] ring-1 ring-white/10 backdrop-blur-md">
+                <div className="flex [scrollbar-width:none] items-center gap-1 overflow-x-auto whitespace-nowrap">
+                  {stops.map((st, i) => (
+                    <button
+                      key={st.name}
+                      type="button"
+                      onClick={() =>
+                        window.scrollTo({ top: scrollFor(st.s - LOOK), behavior: 'smooth' })
+                      }
+                      className="flex shrink-0 items-center gap-2 rounded-full px-3.5 py-2 text-[13px] font-semibold transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-[#ffc845]"
+                      style={
+                        i === active
+                          ? {
+                              background: '#037ef3',
+                              color: '#ffffff',
+                              boxShadow: '0 0 20px rgba(3,126,243,.55)',
+                            }
+                          : { background: 'transparent', color: 'rgba(255,255,255,.85)' }
+                      }
+                      aria-current={i === active ? 'true' : undefined}
+                    >
+                      <span className="size-2 rounded-full" style={{ background: st.color }} />
+                      {st.name}
+                    </button>
+                  ))}
+                </div>
+                <div className="mx-3 mt-2 mb-1 h-[3px] overflow-hidden rounded-full bg-white/15">
+                  <div
+                    ref={barRef}
+                    className="h-full origin-left scale-x-0 rounded-full bg-[#ffc845]"
+                  />
+                </div>
+              </div>
+            </nav>
+          )}
         </div>
       </div>
     </section>
